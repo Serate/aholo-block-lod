@@ -7,5 +7,5 @@ corepack install
 
 pnpm install
 npm config set registry https://registry.npmjs.org
-npm config set registry //registry.npmjs.org/:_authToken ${NPM_TOKEN}
+npm config set //registry.npmjs.org/:_authToken ${NPM_TOKEN}
 node scripts/publish-packages.mjs

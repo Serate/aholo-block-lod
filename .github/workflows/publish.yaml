@@ -3,8 +3,11 @@ on: workflow_dispatch
 name: publish
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
+    environment:
+      name: publish
+      deployment: false
     if: github.ref == 'refs/heads/master'
     steps:
       - name: Checkout
