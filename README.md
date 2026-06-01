@@ -2,6 +2,12 @@
 
 # Aholo Viewer
 
+![Build Status](https://github.com/manycoretech/aholo-viewer/actions/workflows/build.yaml/badge.svg?branch=master)
+[![aholo-viewer](https://img.shields.io/npm/v/@manycore/aholo-viewer?label=aholo-viewer)](https://www.npmjs.com/package/@manycore/aholo-viewer)
+[![splat-transform](https://img.shields.io/npm/v/@manycore/aholo-splat-transform?label=splat-transform)](https://www.npmjs.com/package/@manycore/aholo-splat-transform)
+[![dev-server](https://img.shields.io/npm/v/@manycore/aholo-splat-dev-server?label=splat-dev-server)](https://www.npmjs.com/package/@manycore/aholo-splat-dev-server)
+[![license](https://img.shields.io/npm/l/@manycore/aholo-viewer)](#license)
+
 Monorepo for the Aholo Viewer package and its documentation website.
 
 ## What is Aholo Viewer
