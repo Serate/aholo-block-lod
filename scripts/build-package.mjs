@@ -132,29 +132,24 @@ function emitPackageDeclarations(tsconfigPath) {
 
 async function bundleDeclarations() {
     rollup(packageRoot, {
-        bundledPackages: [
-            '@qunhe/egs',
-            '@qunhe/egs-animation',
-            '@qunhe/egs-gltf-loader',
-            '@qunhe/egs-draco-loader',
-            '@qunhe/egs-splat-loader',
-            '@qunhe/egs-splat-utils',
+        typeOnlyExports: [
+            { name: 'Viewer', type: 'class', abstract: false },
+            { name: 'Viewport', type: 'class', abstract: false },
+            { name: 'Material', type: 'class', abstract: true },
+            { name: 'Light', type: 'class', abstract: true },
         ],
+        extractorConfig: {
+            bundledPackages: [
+                '@qunhe/egs',
+                '@qunhe/egs-animation',
+                '@qunhe/egs-gltf-loader',
+                '@qunhe/egs-draco-loader',
+                '@qunhe/egs-splat-loader',
+                '@qunhe/egs-splat-utils',
+            ],
+        },
     });
-    let content = await readFile(resolve(packageRoot, 'build/index.d.ts'), 'utf-8');
-    const typeClasses = [];
-    for (const { name, exported, unexported } of declareOnlyClasses) {
-        if (content.indexOf(exported) !== -1) {
-            content = content.replace(exported, unexported);
-            typeClasses.push(name);
-        }
-    }
-    if (typeClasses.length > 0) {
-        content += `\nexport type {
-    ${typeClasses.join(',\n    ')}
-}\n`;
-    }
-    await writeFile(declarationOutput, content, 'utf-8');
+    await cp(resolve(packageRoot, 'build/index.d.ts'), declarationOutput, { force: true });
 }
 
 async function stripPrivateTypingsImports() {
