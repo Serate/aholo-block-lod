@@ -5,7 +5,6 @@
     "declarationMap": true,
     "noEmit": false,
     "sourceMap": true,
-    "verbatimModuleSyntax": false,
     "strictPropertyInitialization": false,
     "isolatedModules": false,
     "strictFunctionTypes": false,

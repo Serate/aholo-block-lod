@@ -40,7 +40,7 @@ export {
     WebGLStencilOp as StencilOp,
     WebGLStencilFunc as StencilFunc,
     Layers,
-    Intersection,
+    type Intersection,
     Raycaster,
     TypeAssert,
     DrawableRenderMode,
@@ -75,7 +75,7 @@ export {
     type ReadonlyVector4,
 } from '@qunhe/egs';
 
-export { IntersectContainment, BVH, BVHNode, BVHSource } from '@qunhe/egs-lib';
+export { IntersectContainment, BVH, type BVHNode, type BVHSource } from '@qunhe/egs-lib';
 
 import * as Events from './events.js';
 import * as Animation from './animation.js';
@@ -87,9 +87,9 @@ import * as SplatUtils from './splat-utils.js';
 import {
     Application,
     BackgroundMode,
-    EngineInitializeConfig,
+    type EngineInitializeConfig,
     Viewer,
-    Viewport,
+    type Viewport,
     Texture,
     ToneMapping,
     Vector3,
