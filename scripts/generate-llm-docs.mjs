@@ -12,6 +12,7 @@
  *     manual/{slug}.md, index.md
  *     api/{category}/{folder}/{name}.md, index.md
  *     examples/{slug}.md, index.md
+ *   website/dist/llms.txt
  */
 
 import { existsSync } from 'node:fs';
@@ -23,7 +24,9 @@ const LOCALE = 'en-US';
 const manualSourceRoot = resolve(workspaceRoot, 'website/src/content/manual');
 const examplesSourceRoot = resolve(workspaceRoot, 'website/src/content/examples');
 const generatedApiRoot = resolve(workspaceRoot, 'website/.generated/api');
+const websiteDistRoot = resolve(workspaceRoot, 'website/dist');
 const llmRoot = resolve(workspaceRoot, 'website/dist/llm');
+const llmsTxtPath = resolve(websiteDistRoot, 'llms.txt');
 
 await rm(llmRoot, { recursive: true, force: true });
 await mkdir(llmRoot, { recursive: true });
@@ -35,9 +38,10 @@ const exampleEntries = await emitExamples();
 
 await writeFile(resolve(llmRoot, 'index.md'), renderRootIndex(manualEntries, apiEntries, exampleEntries));
 await writeFile(resolve(llmRoot, 'README.md'), renderReadme());
+await writeFile(llmsTxtPath, renderLlmsTxt(manualEntries, apiEntries, exampleEntries));
 
 console.log(
-    `[llm-docs] Wrote markdown corpus: ` +
+    `[llm-docs] Wrote markdown corpus and /llms.txt: ` +
         `${manualEntries.length} manual, ${apiEntries.length} api, ${exampleEntries.length} example files.`,
 );
 
@@ -461,6 +465,31 @@ function renderReadme() {
         'but as plain English markdown, which is easier for automated coding agents to parse.',
         '',
         'Do not edit files here directly — they will be regenerated on every build.',
+        '',
+    ].join('\n');
+}
+
+function renderLlmsTxt(manual, api, examples) {
+    return [
+        '# Aholo Viewer',
+        '',
+        '> High-performance 3D Gaussian Splatting rendering for web applications.',
+        '',
+        'AI assistants should use the markdown corpus under `/llm/` before scraping the human-facing site.',
+        '',
+        '## Primary Docs',
+        '',
+        `- [AI documentation index](/llm/index.md): overview and recommended reading order.`,
+        `- [Manual](/llm/manual/index.md): product manual, ${manual.length} pages.`,
+        `- [API Reference](/llm/api/index.md): exported SDK symbols, ${api.length} entries.`,
+        `- [Examples](/llm/examples/index.md): runnable TypeScript examples, ${examples.length} demos.`,
+        '',
+        '## Recommended Use',
+        '',
+        '- Start with `/llm/manual/getting-started.md` for setup.',
+        '- Read `/llm/manual/basic-concepts.md` for the scene, camera, and renderer model.',
+        '- Use `/llm/api/index.md` to locate public exports.',
+        '- Use `/llm/examples/index.md` for runnable integration patterns.',
         '',
     ].join('\n');
 }
