@@ -8,8 +8,8 @@ const packages = JSON.parse(
 
 for (const p of packages) {
     const cwd = p.path;
-    const packageJson = JSON.parse(fs.readFileSync(path.resolve(cwd, 'package.json')));
-    const buildCommand = packageJson.scripts?.['.build'];
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve(cwd, 'package.json'), 'utf-8'));
+    const hiddenBuildCommand = packageJson.scripts?.['.build'];
     let published = false;
     try {
         child_process.execSync(`npm view ${p.name}@${p.version}`, { stdio: 'ignore' });
@@ -18,9 +18,14 @@ for (const p of packages) {
         // assume not found. should publish.
     }
     if (!published) {
-        if (buildCommand) {
-            child_process.execSync(buildCommand, { stdio: 'inherit', cwd });
+        if (hiddenBuildCommand) {
+            // hidden build command exists, add build commands to call .build
+            packageJson.scripts.build = 'pnpm run .build';
+            fs.writeFileSync(path.resolve(cwd, 'package.json'), JSON.stringify(packageJson, undefined, 2), 'utf-8');
         }
+        // run build command if exists
+        child_process.execSync('pnpm run --if-present build', { stdio: 'inherit', cwd });
+        // cleanup package.json before publish
         child_process.execSync('npm pkg delete scripts devDependencies', { stdio: 'inherit', cwd });
         child_process.execSync('npm publish --access public', { stdio: 'inherit', cwd });
     }
