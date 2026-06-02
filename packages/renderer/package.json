@@ -21,9 +21,10 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    ".build": "node ../../scripts/build-package.mjs",
+    ".build": "pnpm run .egs:types && node ../../scripts/build-package.mjs",
     ".check": "tsc -p tsconfig.json --noEmit",
-    ".clean": "node ../../scripts/clean-package.mjs"
+    ".clean": "node ../../scripts/clean-package.mjs",
+    ".egs:types": "node ../../scripts/prepare-egs-types.mjs"
   },
   "publishConfig": {
     "access": "public"
