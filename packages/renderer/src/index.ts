@@ -75,6 +75,8 @@ export {
     type ReadonlyVector4,
 } from '@qunhe/egs';
 
+export { IntersectContainment, BVH, BVHNode, BVHSource } from '@qunhe/egs-lib';
+
 import * as Events from './events.js';
 import * as Animation from './animation.js';
 import * as SplatLoader from './splat-loader.js';

@@ -1,7 +1,9 @@
 export {
-    IntersectContainment,
-    SplatBVH,
     SplatOperator,
+    SplatCenterPrimitiveSource,
+    SplatEllipsoidPrimitiveSource,
+    SplatCenterPrimitive,
+    SplatEllipsoidPrimitive,
     combineSplatData,
     computeDenseBox,
     createSplat,

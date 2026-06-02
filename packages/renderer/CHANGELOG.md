@@ -1,5 +1,13 @@
 # ChangeLOG
 
+## 1.3.0
+
+1. Features
+    - `SplatUtils`add support for `center` and `ellipsoid`
+        > **`constructor` has been changed, migrate: `new SplatBVH(operator)` -> `new BVH(SplatCenterPrimitiveSource(operator))`**
+2. Fixes
+    - `SplatUtils`state texture type change to `r8uint`
+
 ## 1.2.9
 
 1. Features
