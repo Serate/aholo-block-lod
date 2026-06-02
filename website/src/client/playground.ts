@@ -271,7 +271,7 @@ export async function mountPlayground(root: HTMLElement, config: PlaygroundConfi
     }
 
     presetTrigger.addEventListener('click', () => {
-        setPresetMenuOpen(presetList.hidden);
+        setPresetMenuOpen(presetList.hidden as any as boolean);
     });
     presetTrigger.addEventListener('keydown', event => {
         if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {

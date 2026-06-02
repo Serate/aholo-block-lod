@@ -6,4 +6,4 @@ corepack enable
 corepack install
 
 pnpm install
-pnpm build
+pnpm check

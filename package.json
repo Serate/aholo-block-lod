@@ -14,7 +14,7 @@
     "build": "pnpm run build:website",
     "build:renderer": "pnpm run .egs:types && pnpm run .renderer:build",
     "build:website": "pnpm run .egs:types && pnpm run .renderer:build && pnpm run .docs:api && pnpm run .site:build && pnpm run .docs:llm",
-    "check": "pnpm run check:style && pnpm run .egs:types && pnpm run .renderer:check && pnpm run .renderer:build && pnpm run .docs:api && pnpm run check:content && pnpm run .site:check",
+    "check": "pnpm run check:style && pnpm run .egs:types && pnpm run .renderer:check && pnpm run .renderer:build && pnpm run .docs:api && pnpm run check:content && pnpm run .site:check && pnpm run .site:build && pnpm run .docs:llm",
     "check:style": "prettier . --check",
     "check:content": "node scripts/check-content.mjs",
     "check:renderer": "pnpm run .egs:types && pnpm run .renderer:check",

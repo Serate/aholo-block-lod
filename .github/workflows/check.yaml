@@ -6,10 +6,10 @@ on:
     branches:
       - 'master'
 
-name: build
+name: check
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,5 +20,5 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-      - run: chmod a+x ./ci/build.sh
-      - run: ./ci/build.sh
+      - run: chmod a+x ./ci/check.sh
+      - run: ./ci/check.sh

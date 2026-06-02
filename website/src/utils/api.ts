@@ -1,4 +1,5 @@
 import type { Locale } from '../i18n/locales';
+// @ts-ignore
 import { type ApiCategory, type ApiManifestEntry, apiManifest } from '../../.generated/api/manifest';
 
 export type ApiEntry = ApiManifestEntry & {
