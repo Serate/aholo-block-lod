@@ -5,6 +5,12 @@
   "author": "egs",
   "repository": "https://github.com/manycoretech/aholo-viewer.git",
   "license": "UNLICENSED",
+  "keywords": [
+    "aholo",
+    "cli",
+    "3d-gaussian-splatting",
+    "gaussian-splatting"
+  ],
   "engines": {
     "node": ">= 22.22.1"
   },

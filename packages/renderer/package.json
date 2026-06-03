@@ -5,6 +5,18 @@
   "author": "egs",
   "repository": "https://github.com/manycoretech/aholo-viewer.git",
   "license": "MIT",
+  "keywords": [
+    "aholo",
+    "renderer",
+    "viewer",
+    "webgl",
+    "webgl2",
+    "3d",
+    "3d-gaussian-splatting",
+    "gaussian-splatting",
+    "canvas",
+    "html5"
+  ],
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",

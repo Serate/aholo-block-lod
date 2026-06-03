@@ -8,6 +8,13 @@
   "engines": {
     "node": ">= 22.22.1"
   },
+  "keywords": [
+    "aholo",
+    "cli",
+    "3d-gaussian-splatting",
+    "gaussian-splatting",
+    "server"
+  ],
   "type": "module",
   "bin": {
     "splat-dev-server": "bin/server.js",
