@@ -10,6 +10,7 @@ overrides:
   '@qunhe/egs-lib': workspace:*
   '@qunhe/egs': workspace:*
   '@qunhe/egs-animation': workspace:*
+  '@qunhe/egs-texture-loader': workspace:*
   '@qunhe/egs-gltf-loader': workspace:*
   '@qunhe/egs-draco-loader': workspace:*
   '@qunhe/egs-splat-loader': workspace:*
@@ -154,6 +155,19 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  external/egs-core/packages/loaders/texture-loader:
+    dependencies:
+      '@qunhe/egs':
+        specifier: workspace:*
+        version: link:../../egs
+      '@qunhe/egs-lib':
+        specifier: workspace:*
+        version: link:../../egs-lib
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   external/egs-core/packages/utils/splat-utils:
     dependencies:
       '@qunhe/egs':
@@ -235,6 +249,9 @@ importers:
       '@qunhe/egs-splat-utils':
         specifier: workspace:*
         version: link:../../external/egs-core/packages/utils/splat-utils
+      '@qunhe/egs-texture-loader':
+        specifier: workspace:*
+        version: link:../../external/egs-core/packages/loaders/texture-loader
       '@types/node':
         specifier: ^22.19.19
         version: 22.19.19

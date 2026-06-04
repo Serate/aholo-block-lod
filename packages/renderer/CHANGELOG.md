@@ -1,5 +1,11 @@
 # ChangeLOG
 
+## DEV
+
+1. Features
+    - add `texture-loader`, now `downloadTexture` is a generic texture load
+        - supported types: image types(png, jpg, webp, etc...), ktx2 and dds
+
 ## 1.3.0
 
 1. Features

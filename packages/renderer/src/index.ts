@@ -76,6 +76,7 @@ export {
 } from '@qunhe/egs';
 
 export { IntersectContainment, BVH, type BVHNode, type BVHSource } from '@qunhe/egs-lib';
+export { downloadTexture, type LoaderOptions } from '@qunhe/egs-texture-loader';
 
 import * as Events from './events.js';
 import * as Animation from './animation.js';
@@ -99,10 +100,7 @@ import {
     MeshBasicMaterial as BaseMeshBasicMaterial,
     MeshPhongMaterial as BaseMeshPhongMaterial,
     SpriteMaterial as BaseSpriteMaterial,
-    SourceTexture,
-    TextureDimension,
-    TextureViewDimension,
-    TextureFormat,
+    type SourceTexture,
     __INTERNAL__,
 } from '@qunhe/egs';
 
@@ -329,33 +327,6 @@ export interface IViewerConfig {
      * render pipeline config
      */
     pipeline?: IPipelineConfig;
-}
-
-async function loadImage(url: string, { crossOrigin = '' } = {}) {
-    const image = document.createElement('img');
-    if (!url.startsWith('data:')) {
-        if (crossOrigin !== undefined) {
-            image.crossOrigin = crossOrigin;
-        }
-    }
-    image.src = url;
-    await image.decode();
-
-    return image;
-}
-
-export async function downloadTexture(url: string) {
-    const image = await loadImage(url);
-    return new SourceTexture(
-        TextureDimension.D2,
-        TextureViewDimension.D2,
-        TextureFormat.Rgba8Unorm,
-        image.width,
-        image.height,
-        1,
-        true,
-        true,
-    ).setLevelLayerData(image, 0, 0);
 }
 
 export function createViewer(name: string, container: HTMLElement, config: EngineInitializeConfig) {

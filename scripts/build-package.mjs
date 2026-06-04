@@ -40,10 +40,28 @@ const egsPackagesRoot = resolveWorkspacePath(
     packageJson.aholoBuild?.egsPackagesRoot ?? 'external/egs-core/packages',
     'EGS packages root',
 );
-const workerEntry = resolveWorkspacePath(
-    packageJson.aholoBuild?.workerEntry ?? 'external/egs-core/packages/loaders/splat-loader/worker.ts',
-    'splat worker entry',
-);
+const workerBundles = [
+    createWorkerBundle({
+        configKey: 'workerEntry',
+        defaultEntry: 'external/egs-core/packages/loaders/splat-loader/worker.ts',
+        entryLabel: 'splat worker entry',
+        fileName: 'splat-worker.js',
+        factorySourceFilter: /loaders[\\/]splat-loader[\\/]index\.ts$/,
+        factoryName: 'SplatWorkerFactor',
+        blobUrlName: 'SplatWorkerBlobUrl',
+        nextStatement: 'const poll =',
+    }),
+    createWorkerBundle({
+        configKey: 'transcoderWorkerEntry',
+        defaultEntry: 'external/egs-core/packages/loaders/texture-loader/ktx2/basis/worker/transcoder.worker.ts',
+        entryLabel: 'texture transcoder worker entry',
+        fileName: 'transcoder-worker.js',
+        factorySourceFilter: /loaders[\\/]texture-loader[\\/]ktx2[\\/]basis[\\/]worker[\\/]pool\.ts$/,
+        factoryName: 'WorkerFactor',
+        blobUrlName: 'TranscoderWorkerBlobUrl',
+        nextStatement: 'const pool =',
+    }),
+];
 
 const declareOnlyClasses = [
     { name: 'Viewer', exported: 'export declare class Viewer', unexported: 'declare class Viewer' },
@@ -96,7 +114,7 @@ async function bundleRuntime() {
             '.jpg': 'dataurl',
             '.png': 'dataurl',
         },
-        plugins: [splatLoaderPatchPlugin(), dracoLoaderPatchPlugin()],
+        plugins: [workerBundlePatchPlugin(workerBundles), textureLoaderPatchPlugin(), dracoLoaderPatchPlugin()],
     };
 
     await build({
@@ -105,11 +123,13 @@ async function bundleRuntime() {
         outfile: runtimeOutput,
     });
 
-    await build({
-        ...shared,
-        entryPoints: [workerEntry],
-        outfile: resolve(runtimeDir, 'splat-worker.js'),
-    });
+    for (const workerBundle of workerBundles) {
+        await build({
+            ...shared,
+            entryPoints: [workerBundle.entry],
+            outfile: resolve(runtimeDir, workerBundle.fileName),
+        });
+    }
 }
 
 function emitPackageDeclarations(tsconfigPath) {
@@ -142,6 +162,7 @@ async function bundleDeclarations() {
             bundledPackages: [
                 '@qunhe/egs',
                 '@qunhe/egs-animation',
+                '@qunhe/egs-texture-loader',
                 '@qunhe/egs-gltf-loader',
                 '@qunhe/egs-draco-loader',
                 '@qunhe/egs-splat-loader',
@@ -218,34 +239,89 @@ function removeTypeModifier(specifier) {
     return specifier.replace(/^type\s+/u, '').trim();
 }
 
-function splatLoaderPatchPlugin() {
+function createWorkerBundle(config) {
     return {
-        name: 'aholo-splat-loader-patch',
-        setup(buildContext) {
-            buildContext.onLoad({ filter: /loaders[\\/]splat-loader[\\/]index\.ts$/ }, async args => {
-                const source = await readFile(args.path, 'utf8');
-                const contents = source.replace(
-                    /let SplatWorkerFactor: \(\) => Worker;\s*try \{[\s\S]*?\};\s*const poll =/,
-                    `let SplatWorkerFactor: () => Worker;
-let SplatWorkerBlobUrl: string | undefined;
-SplatWorkerFactor = () => {
-    const workerUrl = new URL("./splat-worker.js", import.meta.url).href;
+        ...config,
+        entry: resolveWorkspacePath(
+            packageJson.aholoBuild?.[config.configKey] ?? config.defaultEntry,
+            config.entryLabel,
+        ),
+    };
+}
 
-    if (!SplatWorkerBlobUrl) {
+function workerBundlePatchPlugin(workerBundles) {
+    return {
+        name: 'aholo-worker-bundle-patch',
+        setup(buildContext) {
+            for (const workerBundle of workerBundles) {
+                buildContext.onLoad({ filter: workerBundle.factorySourceFilter }, async args => {
+                    const source = await readFile(args.path, 'utf8');
+                    const contents = replaceWorkerFactory(source, workerBundle);
+
+                    if (contents === source) {
+                        throw new Error(`Unable to patch ${workerBundle.entryLabel}.`);
+                    }
+
+                    return {
+                        contents,
+                        loader: 'ts',
+                    };
+                });
+            }
+        },
+    };
+}
+
+function replaceWorkerFactory(source, workerBundle) {
+    const factoryPattern = createWorkerFactoryPattern(workerBundle.factoryName, workerBundle.nextStatement);
+
+    return source.replace(factoryPattern, createWorkerFactoryReplacement(workerBundle));
+}
+
+function createWorkerFactoryPattern(factoryName, nextStatement) {
+    return new RegExp(
+        `let ${escapeRegExp(factoryName)}: \\(\\) => Worker;\\s*try \\{[\\s\\S]*?\\};?\\s*${escapeRegExp(nextStatement)}`,
+    );
+}
+
+function createWorkerFactoryReplacement({ factoryName, blobUrlName, fileName, nextStatement }) {
+    return `let ${factoryName}: () => Worker;
+let ${blobUrlName}: string | undefined;
+${factoryName} = () => {
+    const workerUrl = new URL("./${fileName}", import.meta.url).href;
+
+    if (!${blobUrlName}) {
         const source = \`import \${JSON.stringify(workerUrl)};\`;
-        SplatWorkerBlobUrl = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+        ${blobUrlName} = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
     }
 
-    return new Worker(SplatWorkerBlobUrl, { type: "module" });
+    return new Worker(${blobUrlName}, { type: "module" });
 };
-const poll =`,
-                );
+${nextStatement}`;
+}
 
-                return {
-                    contents,
-                    loader: 'ts',
-                };
-            });
+function textureLoaderPatchPlugin() {
+    return {
+        name: 'aholo-texture-loader-patch',
+        setup(buildContext) {
+            buildContext.onLoad(
+                { filter: /loaders[\\/]texture-loader[\\/]ktx2[\\/]basis[\\/]wasm[\\/]basis_transcoder\.js$/ },
+                async args => {
+                    const source = await readFile(args.path, 'utf8');
+                    const nodeBranchShim =
+                        'var fs={readFileSync:function(){throw new Error("Node file loading is not available in the browser build.");}};';
+                    const contents = source.replace(/var fs=require\("fs"\);/, nodeBranchShim);
+
+                    if (contents === source) {
+                        throw new Error('Unable to patch basis_transcoder.js node file-system branch.');
+                    }
+
+                    return {
+                        contents,
+                        loader: 'js',
+                    };
+                },
+            );
         },
     };
 }

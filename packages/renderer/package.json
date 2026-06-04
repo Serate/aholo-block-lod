@@ -44,6 +44,7 @@
   "devDependencies": {
     "@qunhe/egs": "workspace:*",
     "@qunhe/egs-animation": "workspace:*",
+    "@qunhe/egs-texture-loader": "workspace:*",
     "@qunhe/egs-gltf-loader": "workspace:*",
     "@qunhe/egs-draco-loader": "workspace:*",
     "@qunhe/egs-splat-loader": "workspace:*",
