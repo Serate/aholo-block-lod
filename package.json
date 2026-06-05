@@ -15,14 +15,13 @@
     "build:renderer": "pnpm run .renderer:build",
     "build:website": "pnpm run .renderer:build && pnpm run .docs:api && pnpm run .site:build && pnpm run .docs:llm",
     "check": "pnpm run check:style && pnpm run .renderer:check && pnpm run .renderer:build && pnpm run .docs:api && pnpm run check:content && pnpm run .site:check && pnpm run .site:build && pnpm run .docs:llm",
-    "check:style": "prettier . --check",
+    "check:style": "oxfmt --check && oxlint",
     "check:content": "node scripts/check-content.mjs",
     "check:renderer": "pnpm run .renderer:check",
     "check:website": "pnpm run .renderer:build && pnpm run .docs:api && pnpm run check:content && pnpm run .site:check",
     "clean": "pnpm run .renderer:clean && pnpm run .site:clean",
     "docs:api": "pnpm run build:renderer && pnpm run .docs:api",
-    "format": "prettier . --write",
-    "format:check": "prettier . --check",
+    "format": "oxfmt",
     "preview": "pnpm run .site:preview",
     ".docs:api": "node scripts/generate-api-docs.mjs",
     ".docs:llm": "node scripts/generate-llm-docs.mjs",
@@ -37,16 +36,13 @@
   },
   "devDependencies": {
     "@internal/utils": "workspace:*",
-    "@manycore/aholo-splat-transform": "workspace:*",
     "@manycore/aholo-splat-dev-server": "workspace:*",
+    "@manycore/aholo-splat-transform": "workspace:*",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.4",
-    "prettier": "3.8.3",
-    "prettier-plugin-astro": "0.14.1",
+    "oxfmt": "^0.53.0",
+    "oxlint": "^1.68.0",
     "typedoc": "^0.28.19",
     "typescript": "^6.0.3"
-  },
-  "lint-staged": {
-    "**/*": "prettier --write --ignore-unknown"
   }
 }

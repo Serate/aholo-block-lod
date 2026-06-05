@@ -687,7 +687,6 @@ class RenderSessionRenderer implements RuntimeRenderer {
     readonly #beginFrame: (() => void) | undefined;
     readonly #endFrame: (() => void) | undefined;
     #rafRequestId: number | undefined;
-    #frameId = 0;
     #resizeTimer: number | undefined;
     #lastFrameTime = 0;
     #renderRequested = true;
@@ -834,7 +833,6 @@ class RenderSessionRenderer implements RuntimeRenderer {
         this.#beginFrame?.();
         const delta = this.#lastFrameTime > 0 ? Math.min((time - this.#lastFrameTime) / 1000, 0.1) : 0;
         this.#lastFrameTime = time;
-        this.#frameId++;
 
         let shouldRender = this.#renderRequested;
         for (const callback of this.#frameCallbacks) {
