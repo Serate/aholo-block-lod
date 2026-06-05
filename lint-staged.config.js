@@ -1,4 +1,4 @@
 export default {
-    '**/*.{ts,tsx}': ['oxfmt --write --no-error-on-unmatched-pattern', 'oxlint --fix'],
-    '**/*.{md,MD,json,txt,yml,yaml}': ['oxfmt --write --no-error-on-unmatched-pattern'],
+    '**/*.{ts,tsx}': ['oxfmt --disable-nested-config --write --no-error-on-unmatched-pattern', 'oxlint --fix'],
+    '**/*.{md,MD,json,txt,yml,yaml}': ['oxfmt --disable-nested-config --write --no-error-on-unmatched-pattern'],
 };
