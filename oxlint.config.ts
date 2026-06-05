@@ -7,16 +7,18 @@ export default defineConfig({
         es2026: true,
     },
     ignorePatterns: [
+        '.github/*',
         '**/build/**',
         '**/dist/**',
         '**/bin/*',
         '**/scripts/**',
+        // website
+        '**/.astro/**',
+        '**/.generated/**',
+        // externals
         '**/*.impl.ts',
         '**/wasm/*',
         '**/draco-loader/*.js',
-        '.github/*',
-        '**/.astro/**',
-        '**/.generated/**',
         'external/splat-dev-server/**',
         'external/splat-transform/**',
     ],
