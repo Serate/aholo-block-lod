@@ -1193,8 +1193,8 @@ export class WalkThirdPersonCharacter {
             const buffer = await response.arrayBuffer();
             throwIfAborted(signal);
             const result = await loadGLTF(buffer, {
-                textureLoader: (url: string) => downloadTexture(url),
-            } as any);
+                textureLoader: downloadTexture,
+            });
             throwIfAborted(signal);
 
             // GLTF loader typings differ; scene graph objects are runtime-compatible with our Scene3D.
