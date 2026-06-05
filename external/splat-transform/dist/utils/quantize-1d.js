@@ -50,7 +50,7 @@ export function quantize1d(fields, k = 256, alpha = 0.5, transform) {
     }
     const centers = new Float64Array(H);
     for (let i = 0; i < H; ++i) {
-        centers[i] = counts[i] > 0 ? sums[i] / counts[i] : vMin + (i + 0.5) / H * vRange;
+        centers[i] = counts[i] > 0 ? sums[i] / counts[i] : vMin + ((i + 0.5) / H) * vRange;
     }
     // compute weights: w = count^alpha (sub-linear density weighting)
     const weights = new Float64Array(H);

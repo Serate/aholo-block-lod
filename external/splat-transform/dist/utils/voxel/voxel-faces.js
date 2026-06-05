@@ -1,5 +1,5 @@
 import { BLOCK_EMPTY, BLOCK_SOLID, BLOCKS_PER_WORD, EVEN_BITS, readBlockType } from './common.js';
-const HASH_MUL = 0x9E3779B9;
+const HASH_MUL = 0x9e3779b9;
 /**
  * Extract a watertight voxel-boundary mesh from a SparseVoxelGrid.
  *
@@ -27,8 +27,7 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
             grown.set(faceKeys);
             faceKeys = grown;
         }
-        faceKeys[faceLen++] =
-            (((bucket * coordStride + p) * coordStride + u) * coordStride + v);
+        faceKeys[faceLen++] = ((bucket * coordStride + p) * coordStride + u) * coordStride + v;
     };
     const blockTypeAt = (bx, by, bz) => {
         if (bx < 0 || by < 0 || bz < 0 || bx >= nbx || by >= nby || bz >= nbz) {
@@ -38,9 +37,7 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
     };
     const isVoxelSetLocal = (lo, hi, lx, ly, lz) => {
         const bitIdx = lx + (ly << 2) + (lz << 4);
-        return bitIdx < 32 ?
-            ((lo >>> bitIdx) & 1) !== 0 :
-            ((hi >>> (bitIdx - 32)) & 1) !== 0;
+        return bitIdx < 32 ? ((lo >>> bitIdx) & 1) !== 0 : ((hi >>> (bitIdx - 32)) & 1) !== 0;
     };
     const isVoxelSetGlobal = (ix, iy, iz) => {
         if (ix < 0 || iy < 0 || iz < 0 || ix >= nx || iy >= ny || iz >= nz) {
@@ -427,7 +424,7 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
         return idx;
     };
     const vertexKey = (x, y, z) => {
-        return (x + y * coordStride + z * coordStride * coordStride);
+        return x + y * coordStride + z * coordStride * coordStride;
     };
     const getVertex = (x, y, z) => {
         const key = vertexKey(x, y, z);
@@ -657,7 +654,7 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
     }
     return {
         positions: positions.slice(0, posLen),
-        indices: indices.slice(0, idxLen)
+        indices: indices.slice(0, idxLen),
     };
 };
 export { voxelFaces };

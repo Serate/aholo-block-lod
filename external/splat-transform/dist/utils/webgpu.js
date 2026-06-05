@@ -38,7 +38,6 @@ async function getDawnAdapterNames() {
     logger.warn('Expected adapter enumeration to throw an error, but it did not.');
     return [];
 }
-;
 // Cache enumerated adapters so we don't query Dawn multiple times
 let cachedAdapters = null;
 export async function enumerateAdapters() {
@@ -52,7 +51,7 @@ export async function enumerateAdapters() {
         // Cache and return the list
         cachedAdapters = dawnAdapterNames.map((name, index) => ({
             index,
-            name
+            name,
         }));
         return cachedAdapters;
     }
@@ -65,7 +64,6 @@ export async function enumerateAdapters() {
         return [];
     }
 }
-;
 export function initGPUAdapter(options = []) {
     if (!gpu) {
         logger.info(`Init WebGPU adapter${options.length > 0 ? ` with [${options.join(';')}]` : '.'}`);
@@ -75,31 +73,33 @@ export function initGPUAdapter(options = []) {
 export async function createDevice() {
     initGPUAdapter();
     const adapter = await gpu.requestAdapter({
-        powerPreference: 'high-performance'
+        powerPreference: 'high-performance',
     });
     if (!adapter) {
         throw new Error(`No available WebGPU adapter found.`);
     }
     const device = await adapter.requestDevice({
         requiredFeatures: Array.from(adapter.features),
-        requiredLimits: adapter.limits
+        requiredLimits: adapter.limits,
     });
     if (!device) {
         throw new Error('Create WebGPU device failed.');
     }
     logger.info(`WebGPU device created: ${device.adapterInfo.vendor}, ${device.adapterInfo.device}, ${device.adapterInfo.description}`);
-    device.addEventListener('uncapturederror', (event) => {
+    device.addEventListener('uncapturederror', event => {
         const error = event.error;
         const type = error?.type ? ` (${error.type})` : '';
         logger.error(`WebGPU uncaptured error${type}: ${error?.message ?? String(error)}`);
     });
-    device.lost.then((info) => {
+    device.lost
+        .then(info => {
         const message = info.message ? `, message=${info.message}` : '';
         if (info.reason === 'destroyed') {
             return;
         }
         logger.warn(`WebGPU device lost unexpectedly: reason=${info.reason}${message}`);
-    }).catch((e) => {
+    })
+        .catch(e => {
         logger.error(`WebGPU device lost handler failed: ${e instanceof Error ? e.message : String(e)}`);
     });
     return device;
@@ -116,7 +116,7 @@ const { getOrCreateDevice, releaseSharedDevice } = (function () {
         releaseSharedDevice() {
             device?.destroy();
             device = undefined;
-        }
+        },
     };
 })();
 export { getOrCreateDevice, releaseSharedDevice };

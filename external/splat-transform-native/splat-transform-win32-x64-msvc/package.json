@@ -1,0 +1,15 @@
+{
+  "name": "@manycore/aholo-splat-transform-win32-x64-msvc",
+  "version": "1.2.8",
+  "type": "commonjs",
+  "main": "binding.node",
+  "files": [
+    "binding.node"
+  ],
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ]
+}

@@ -15,7 +15,7 @@ export interface ISingleSplat {
     a: number;
     shN: number[];
 }
-export declare const enum ColIdx {
+export declare enum ColIdx {
     x = 0,
     y = 1,
     z = 2,

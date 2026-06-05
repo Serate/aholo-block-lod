@@ -13,7 +13,7 @@ export class AutoLodTask extends BaseTask {
             { precision: target / splat.counts, scaleBoost: 1.0 },
         ], 0.2, 2000, 20);
         const raw = combineSplatData(blocks.map(item => splats[item.refs[1]]));
-        logger.info(`result -> ${raw.counts}(${(raw.counts / target * 100).toFixed(2)}%)`);
+        logger.info(`result -> ${raw.counts}(${((raw.counts / target) * 100).toFixed(2)}%)`);
         resources.set(output, raw);
         logger.info(`stored -> key="${output}"`);
     }

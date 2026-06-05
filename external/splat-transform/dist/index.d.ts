@@ -1,11 +1,11 @@
-import { Config as AutoChunkLodConfig } from './tasks/AutoChunkLodTask.js';
-import { Config as AutoLodConfig } from './tasks/AutoLodTask.js';
-import { Config as FlexLodConfig } from './tasks/FlexLodTask.js';
-import { Config as SkeletonLodConfig } from './tasks/SkeletonLodTask.js';
-import { Config as ModifyConfig } from './tasks/ModifyTask.js';
-import { Config as ReadConfig } from './tasks/ReadTask.js';
-import { Config as WriteConfig } from './tasks/WriteTask.js';
-import { VoxelTaskConfig } from './tasks/VoxelTask.js';
+import { type Config as AutoChunkLodConfig } from './tasks/AutoChunkLodTask.js';
+import { type Config as AutoLodConfig } from './tasks/AutoLodTask.js';
+import { type Config as FlexLodConfig } from './tasks/FlexLodTask.js';
+import { type Config as SkeletonLodConfig } from './tasks/SkeletonLodTask.js';
+import { type Config as ModifyConfig } from './tasks/ModifyTask.js';
+import { type Config as ReadConfig } from './tasks/ReadTask.js';
+import { type Config as WriteConfig } from './tasks/WriteTask.js';
+import { type VoxelTaskConfig } from './tasks/VoxelTask.js';
 interface TaskConfigMap {
     Read: ReadConfig;
     Write: WriteConfig;

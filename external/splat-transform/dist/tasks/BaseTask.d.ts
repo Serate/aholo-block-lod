@@ -1,5 +1,5 @@
-import { SplatData } from '../SplatData.js';
-import { Logger } from '../utils/Logger.js';
+import type { SplatData } from '../SplatData.js';
+import type { Logger } from '../utils/Logger.js';
 export interface SingleFile {
     name: string;
     content: SplatData | string;

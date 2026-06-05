@@ -39,9 +39,51 @@ const KSPLAT_COMPRESSION = {
     },
 };
 const SHIndex = [
-    0, 3, 6, 1, 4, 7, 2, 5, 8, // sh1
-    9, 14, 19, 10, 15, 20, 11, 16, 21, 12, 17, 22, 13, 18, 23, // sh2
-    24, 31, 38, 25, 32, 39, 26, 33, 40, 27, 34, 41, 28, 35, 42, 29, 36, 43, 30, 37, 44, // sh3
+    0,
+    3,
+    6,
+    1,
+    4,
+    7,
+    2,
+    5,
+    8, // sh1
+    9,
+    14,
+    19,
+    10,
+    15,
+    20,
+    11,
+    16,
+    21,
+    12,
+    17,
+    22,
+    13,
+    18,
+    23, // sh2
+    24,
+    31,
+    38,
+    25,
+    32,
+    39,
+    26,
+    33,
+    40,
+    27,
+    34,
+    41,
+    28,
+    35,
+    42,
+    29,
+    36,
+    43,
+    30,
+    37,
+    44, // sh3
 ];
 const HEADER_BYTES = 4096;
 const SECTION_BYTES = 1024;
@@ -134,13 +176,23 @@ export class KsplatFile {
         const setFn = data.set.bind(data);
         const setShFn = data.setShN.bind(data);
         const { buffer, header, sections, shDegree: maxSHDegree } = this;
-        const { maxSectionCount, compressionLevel, shRange: [minSH, maxSH] } = header;
+        const { maxSectionCount, compressionLevel, shRange: [minSH, maxSH], } = header;
         const isHighQualitySplatData = compressionLevel === 0;
         const single = {
-            x: 0, y: 0, z: 0,
-            sx: 0, sy: 0, sz: 0,
-            qx: 0, qy: 0, qz: 0, qw: 0,
-            r: 0, g: 0, b: 0, a: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+            sx: 0,
+            sy: 0,
+            sz: 0,
+            qx: 0,
+            qy: 0,
+            qz: 0,
+            qw: 0,
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
             shN: [],
         };
         const maxSHSize = SH_MAPS[maxSHDegree];
@@ -153,7 +205,10 @@ export class KsplatFile {
             const bucketsStorageSizeBytes = bucketStorageSizeBytes * bucketCount + bucketsMetaDataSizeBytes;
             const shComponents = SH_MAPS[shDegree];
             const { bytesPerCenter, bytesPerScale, bytesPerRotation, bytesPerColor, bytesPerSphericalHarmonicsComponent, scaleOffsetBytes, rotationOffsetBytes, colorOffsetBytes, sphericalHarmonicsOffsetBytes, } = KSPLAT_COMPRESSION[compressionLevel];
-            const bytesPerSplat = bytesPerCenter + bytesPerScale + bytesPerRotation + bytesPerColor +
+            const bytesPerSplat = bytesPerCenter +
+                bytesPerScale +
+                bytesPerRotation +
+                bytesPerColor +
                 shComponents * bytesPerSphericalHarmonicsComponent;
             const splatDataStorageSizeBytes = bytesPerSplat * sectionMaxSplatCount;
             const storageSizeBytes = splatDataStorageSizeBytes + bucketsStorageSizeBytes;
@@ -192,9 +247,15 @@ export class KsplatFile {
                     single.qz = data.getFloat32(splatOffset + rotationOffsetBytes + 12, true);
                 }
                 else {
-                    single.x = (data.getUint16(splatOffset + 0, true) - compressionScaleRange) * compressionScaleFactor + bucketArray[3 * bucketIndex + 0];
-                    single.y = (data.getUint16(splatOffset + 2, true) - compressionScaleRange) * compressionScaleFactor + bucketArray[3 * bucketIndex + 1];
-                    single.z = (data.getUint16(splatOffset + 4, true) - compressionScaleRange) * compressionScaleFactor + bucketArray[3 * bucketIndex + 2];
+                    single.x =
+                        (data.getUint16(splatOffset + 0, true) - compressionScaleRange) * compressionScaleFactor +
+                            bucketArray[3 * bucketIndex + 0];
+                    single.y =
+                        (data.getUint16(splatOffset + 2, true) - compressionScaleRange) * compressionScaleFactor +
+                            bucketArray[3 * bucketIndex + 1];
+                    single.z =
+                        (data.getUint16(splatOffset + 4, true) - compressionScaleRange) * compressionScaleFactor +
+                            bucketArray[3 * bucketIndex + 2];
                     single.sx = fromHalf(data.getUint16(splatOffset + scaleOffsetBytes + 0, true));
                     single.sy = fromHalf(data.getUint16(splatOffset + scaleOffsetBytes + 2, true));
                     single.sz = fromHalf(data.getUint16(splatOffset + scaleOffsetBytes + 4, true));
@@ -210,11 +271,12 @@ export class KsplatFile {
                 setFn(j + BlockOffset, single);
                 const shOffsetBytes = splatOffset + sphericalHarmonicsOffsetBytes;
                 for (let k = 0; k < shComponents; k++) {
-                    shData[k] = compressionLevel === 0 ?
-                        data.getFloat32(shOffsetBytes + SHIndex[k] * 4, true) :
-                        compressionLevel === 1 ?
-                            fromHalf(data.getUint16(shOffsetBytes + SHIndex[k] * 2, true)) :
-                            (minSH + data.getUint8(shOffsetBytes + SHIndex[k]) / 255 * (maxSH - minSH));
+                    shData[k] =
+                        compressionLevel === 0
+                            ? data.getFloat32(shOffsetBytes + SHIndex[k] * 4, true)
+                            : compressionLevel === 1
+                                ? fromHalf(data.getUint16(shOffsetBytes + SHIndex[k] * 2, true))
+                                : minSH + (data.getUint8(shOffsetBytes + SHIndex[k]) / 255) * (maxSH - minSH);
                 }
                 for (let k = maxSHSize - 1; k >= shComponents; k--) {
                     shData[k] = 0;

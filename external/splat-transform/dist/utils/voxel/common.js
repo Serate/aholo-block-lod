@@ -40,27 +40,26 @@ export const decodeMorton3 = (m) => {
 };
 /** Voxel leaf edge length in voxels (4³ block). */
 export const LEAF_SIZE = 4;
-export const ALPHA_THRESHOLD = 1. / 255.;
+export const ALPHA_THRESHOLD = 1 / 255;
 export const alignGridBounds = (bounds, voxelResolution) => {
     const blockSize = LEAF_SIZE * voxelResolution;
     return {
         min: {
             x: Math.floor(bounds.min.x / blockSize) * blockSize,
             y: Math.floor(bounds.min.y / blockSize) * blockSize,
-            z: Math.floor(bounds.min.z / blockSize) * blockSize
+            z: Math.floor(bounds.min.z / blockSize) * blockSize,
         },
         max: {
             x: Math.ceil(bounds.max.x / blockSize) * blockSize,
             y: Math.ceil(bounds.max.y / blockSize) * blockSize,
-            z: Math.ceil(bounds.max.z / blockSize) * blockSize
-        }
+            z: Math.ceil(bounds.max.z / blockSize) * blockSize,
+        },
     };
 };
 /** Opacity-aware AABB half-extents from scale + unit quaternion. */
 export const extentsFromQuatScale = (sx, sy, sz, qx, qy, qz, qw, opacity, opacityThreshold = ALPHA_THRESHOLD) => {
     let extend = 3;
-    if (opacity !== undefined &&
-        opacity > opacityThreshold) {
+    if (opacity !== undefined && opacity > opacityThreshold) {
         // Tight bound from opacity threshold, clamped by default 3-sigma bound.
         const opacityAware = Math.sqrt(2 * Math.log(opacity / opacityThreshold));
         if (Number.isFinite(opacityAware)) {
@@ -241,7 +240,7 @@ export class GaussianBVH {
             }
         }
         const ex = maxCx - minCx, ey = maxCy - minCy, ez = maxCz - minCz;
-        const axis = ex >= ey && ex >= ez ? this.x : (ey >= ez ? this.y : this.z);
+        const axis = ex >= ey && ex >= ez ? this.x : ey >= ez ? this.y : this.z;
         const mid = indices.length >>> 1;
         quickselect(axis, indices, mid);
         return { bounds, left: this.buildNode(indices.subarray(0, mid)), right: this.buildNode(indices.subarray(mid)) };
@@ -255,7 +254,12 @@ export class GaussianBVH {
                 const idx = node.indices[i];
                 const ex = this.extents[idx * 3], ey = this.extents[idx * 3 + 1], ez = this.extents[idx * 3 + 2];
                 const gx = this.x[idx], gy = this.y[idx], gz = this.z[idx];
-                if (!(gx + ex < minX || gx - ex > maxX || gy + ey < minY || gy - ey > maxY || gz + ez < minZ || gz - ez > maxZ)) {
+                if (!(gx + ex < minX ||
+                    gx - ex > maxX ||
+                    gy + ey < minY ||
+                    gy - ey > maxY ||
+                    gz + ez < minZ ||
+                    gz - ez > maxZ)) {
                     result.push(idx);
                 }
             }
@@ -277,7 +281,12 @@ export class GaussianBVH {
                 const idx = node.indices[i];
                 const ex = this.extents[idx * 3], ey = this.extents[idx * 3 + 1], ez = this.extents[idx * 3 + 2];
                 const gx = this.x[idx], gy = this.y[idx], gz = this.z[idx];
-                if (!(gx + ex < minX || gx - ex > maxX || gy + ey < minY || gy - ey > maxY || gz + ez < minZ || gz - ez > maxZ)) {
+                if (!(gx + ex < minX ||
+                    gx - ex > maxX ||
+                    gy + ey < minY ||
+                    gy - ey > maxY ||
+                    gz + ez < minZ ||
+                    gz - ez > maxZ)) {
                     if (offset + count < output.length) {
                         output[offset + count] = idx;
                     }
@@ -295,9 +304,9 @@ export class GaussianBVH {
         return count;
     }
 }
-const SOLID_LO = 0xFFFFFFFF >>> 0;
-const SOLID_HI = 0xFFFFFFFF >>> 0;
-const SOLID_MASK = 0xFFFFFFFF >>> 0;
+const SOLID_LO = 0xffffffff >>> 0;
+const SOLID_HI = 0xffffffff >>> 0;
+const SOLID_MASK = 0xffffffff >>> 0;
 const INITIAL_BLOCK_BUFFER_CAPACITY = 1024;
 const growFloat64 = (src, newCap) => {
     const grown = new Float64Array(newCap);
@@ -331,7 +340,7 @@ export class BlockMaskBuffer {
         if ((lo | hi) === 0) {
             return;
         }
-        if ((lo >>> 0) === SOLID_MASK && (hi >>> 0) === SOLID_MASK) {
+        if (lo >>> 0 === SOLID_MASK && hi >>> 0 === SOLID_MASK) {
             if (this.solidCountValue === this.solidCap) {
                 this.solidCap = this.solidCap === 0 ? INITIAL_BLOCK_BUFFER_CAPACITY : this.solidCap * 2;
                 this.solidIdx = growFloat64(this.solidIdx, this.solidCap);
@@ -352,7 +361,7 @@ export class BlockMaskBuffer {
     getMixedBlocks() {
         return {
             blockIdx: this.mixedIdx.subarray(0, this.mixedCountValue),
-            masks: this.mixedMasks.subarray(0, this.mixedCountValue * 2)
+            masks: this.mixedMasks.subarray(0, this.mixedCountValue * 2),
         };
     }
     getSolidBlocks() {
@@ -392,7 +401,7 @@ const writeBlockType = (types, blockIdx, blockType) => {
     const word = blockIdx >>> 4;
     const shift = (blockIdx & 15) << 1;
     const mask = TYPE_MASK << shift;
-    types[word] = (types[word] & (~mask)) | ((blockType & TYPE_MASK) << shift);
+    types[word] = (types[word] & ~mask) | ((blockType & TYPE_MASK) << shift);
 };
 const EMPTY = -1;
 class BlockMaskMap {
@@ -407,7 +416,7 @@ class BlockMaskMap {
     }
     slot(key) {
         const mask = this._mask;
-        let i = (Math.imul(key, 0x9E3779B9) >>> 0) & mask;
+        let i = (Math.imul(key, 0x9e3779b9) >>> 0) & mask;
         while (true) {
             const k = this.keys[i];
             if (k === key || k === EMPTY) {
@@ -439,8 +448,8 @@ class BlockMaskMap {
             if (this.keys[j] === EMPTY) {
                 break;
             }
-            const k = ((Math.imul(this.keys[j], 0x9E3779B9) >>> 0) & mask);
-            if ((i < j) ? (k <= i || k > j) : (k <= i && k > j)) {
+            const k = (Math.imul(this.keys[j], 0x9e3779b9) >>> 0) & mask;
+            if (i < j ? k <= i || k > j : k <= i && k > j) {
                 this.keys[i] = this.keys[j];
                 this.lo[i] = this.lo[j];
                 this.hi[i] = this.hi[j];
@@ -563,7 +572,7 @@ class SparseVoxelGrid {
             }
         }
         else {
-            if ((lo >>> 0) === SOLID_LO && (hi >>> 0) === SOLID_HI) {
+            if (lo >>> 0 === SOLID_LO && hi >>> 0 === SOLID_HI) {
                 writeBlockType(this.types, blockIdx, BLOCK_SOLID);
             }
             else {
@@ -640,12 +649,15 @@ class SparseVoxelGrid {
                         bz++;
                     }
                 }
-                if (bx < cropMinBx || bx >= cropMaxBx ||
-                    by < cropMinBy || by >= cropMaxBy ||
-                    bz < cropMinBz || bz >= cropMaxBz) {
+                if (bx < cropMinBx ||
+                    bx >= cropMaxBx ||
+                    by < cropMinBy ||
+                    by >= cropMaxBy ||
+                    bz < cropMinBz ||
+                    bz >= cropMaxBz) {
                     continue;
                 }
-                const outIdx = (bx - cropMinBx) + (by - cropMinBy) * outNbx + (bz - cropMinBz) * outBStride;
+                const outIdx = bx - cropMinBx + (by - cropMinBy) * outNbx + (bz - cropMinBz) * outBStride;
                 const bt = (word >>> (lane << 1)) & TYPE_MASK;
                 writeBlockType(outTypes, outIdx, bt);
                 if (bt === BLOCK_MIXED) {
@@ -722,12 +734,15 @@ class SparseVoxelGrid {
                         bz++;
                     }
                 }
-                if (bx < cropMinBx || bx >= cropMaxBx ||
-                    by < cropMinBy || by >= cropMaxBy ||
-                    bz < cropMinBz || bz >= cropMaxBz) {
+                if (bx < cropMinBx ||
+                    bx >= cropMaxBx ||
+                    by < cropMinBy ||
+                    by >= cropMaxBy ||
+                    bz < cropMinBz ||
+                    bz >= cropMaxBz) {
                     continue;
                 }
-                const outIdx = (bx - cropMinBx) + (by - cropMinBy) * outNbx + (bz - cropMinBz) * outBStride;
+                const outIdx = bx - cropMinBx + (by - cropMinBy) * outNbx + (bz - cropMinBz) * outBStride;
                 const bt = (word >>> (lane << 1)) & TYPE_MASK;
                 if (bt === BLOCK_SOLID) {
                     writeBlockType(outTypes, outIdx, BLOCK_EMPTY);
@@ -735,7 +750,7 @@ class SparseVoxelGrid {
                 else {
                     writeBlockType(outTypes, outIdx, BLOCK_MIXED);
                     const s = masks.slot(blockIdx);
-                    outMasks.set(outIdx, (~masks.lo[s]) >>> 0, (~masks.hi[s]) >>> 0);
+                    outMasks.set(outIdx, ~masks.lo[s] >>> 0, ~masks.hi[s] >>> 0);
                 }
             }
         }
@@ -797,7 +812,7 @@ class SparseVoxelGrid {
                     if ((lo | hi) !== 0) {
                         const outNbx = cropMaxBx - cropMinBx;
                         const outNby = cropMaxBy - cropMinBy;
-                        out.addBlock((bx - cropMinBx) + (by - cropMinBy) * outNbx + (bz - cropMinBz) * outNbx * outNby, lo, hi);
+                        out.addBlock(bx - cropMinBx + (by - cropMinBy) * outNbx + (bz - cropMinBz) * outNbx * outNby, lo, hi);
                     }
                 }
             }
@@ -818,8 +833,8 @@ class SparseVoxelGrid {
                     }
                     if (bt === BLOCK_MIXED) {
                         const s = this.masks.slot(blockIdx);
-                        lo = (~this.masks.lo[s]) >>> 0;
-                        hi = (~this.masks.hi[s]) >>> 0;
+                        lo = ~this.masks.lo[s] >>> 0;
+                        hi = ~this.masks.hi[s] >>> 0;
                     }
                     else {
                         lo = SOLID_LO;
@@ -828,7 +843,7 @@ class SparseVoxelGrid {
                     if ((lo | hi) !== 0) {
                         const outNbx = cropMaxBx - cropMinBx;
                         const outNby = cropMaxBy - cropMinBy;
-                        out.addBlock((bx - cropMinBx) + (by - cropMinBy) * outNbx + (bz - cropMinBz) * outNbx * outNby, lo, hi);
+                        out.addBlock(bx - cropMinBx + (by - cropMinBy) * outNbx + (bz - cropMinBz) * outNbx * outNby, lo, hi);
                     }
                 }
             }
@@ -916,7 +931,7 @@ class SparseVoxelGrid {
         const SOLID_WORD = 0x55555555 >>> 0;
         const lastWordIdx = this.types.length - 1;
         const lastLanes = totalBlocks - lastWordIdx * BLOCKS_PER_WORD;
-        const lastNonEmptyMask = lastLanes >= BLOCKS_PER_WORD ? EVEN_BITS : ((((1 << (lastLanes * 2)) - 1) >>> 0) & EVEN_BITS);
+        const lastNonEmptyMask = lastLanes >= BLOCKS_PER_WORD ? EVEN_BITS : (((1 << (lastLanes * 2)) - 1) >>> 0) & EVEN_BITS;
         let minBx = nbx, minBy = nby, minBz = this.nbz;
         let maxBx = -1, maxBy = 0, maxBz = 0;
         const PROGRESS_INTERVAL = 1 << 13;
@@ -1002,21 +1017,21 @@ class SparseVoxelGrid {
         return null;
     }
 }
-export const SOLID_LEAF_MARKER = 0xFF000000 >>> 0;
-const MAX_24BIT_OFFSET = 0x00FFFFFF;
+export const SOLID_LEAF_MARKER = 0xff000000 >>> 0;
+const MAX_24BIT_OFFSET = 0x00ffffff;
 const DENSE_SOLID_STREAM_THRESHOLD = 8_000_000;
 export const getChildOffset = (mask, octant) => {
     const prefix = mask & ((1 << octant) - 1);
     let n = prefix >>> 0;
-    n -= ((n >>> 1) & 0x55555555);
+    n -= (n >>> 1) & 0x55555555;
     n = (n & 0x33333333) + ((n >>> 2) & 0x33333333);
-    return (((n + (n >>> 4)) & 0x0F0F0F0F) * 0x01010101) >>> 24;
+    return (((n + (n >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
 };
 const bitCount = (n) => {
     let v = n >>> 0;
-    v -= ((v >>> 1) & 0x55555555);
+    v -= (v >>> 1) & 0x55555555;
     v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
-    return (((v + (v >>> 4)) & 0x0F0F0F0F) * 0x01010101) >>> 24;
+    return (((v + (v >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
 };
 const sortMixedByMorton = (mortons, masks, n = mortons.length) => {
     if (n <= 1) {
@@ -1106,6 +1121,12 @@ const sortMixedByMorton = (mortons, masks, n = mortons.length) => {
         }
     }
 };
+var OctreeNodeType;
+(function (OctreeNodeType) {
+    OctreeNodeType[OctreeNodeType["Empty"] = 0] = "Empty";
+    OctreeNodeType[OctreeNodeType["Solid"] = 1] = "Solid";
+    OctreeNodeType[OctreeNodeType["Mixed"] = 2] = "Mixed";
+})(OctreeNodeType || (OctreeNodeType = {}));
 const createInteriorWave = (initialCapacity) => {
     const cap = Math.max(16, initialCapacity);
     return { pos: new Uint32Array(cap), li: new Uint32Array(cap), ii: new Uint32Array(cap), length: 0 };
@@ -1129,18 +1150,18 @@ const pushInteriorWave = (wave, pos, li, ii) => {
     wave.ii[i] = ii;
 };
 const shouldUseDenseMipBuild = (totalBlocks, nSolid, nMixed) => {
-    return nSolid >= DENSE_SOLID_STREAM_THRESHOLD &&
-        nSolid > nMixed * 4 &&
-        nSolid > totalBlocks * 0.25;
+    return nSolid >= DENSE_SOLID_STREAM_THRESHOLD && nSolid > nMixed * 4 && nSolid > totalBlocks * 0.25;
 };
 const buildDenseTypeLevels = (grid, maxDepth) => {
-    const levels = [{
+    const levels = [
+        {
             types: grid.types,
             nbx: grid.nbx,
             nby: grid.nby,
             nbz: grid.nbz,
-            nonEmptyCount: 0
-        }];
+            nonEmptyCount: 0,
+        },
+    ];
     for (let li = 1; li <= maxDepth; li++) {
         const prev = levels[li - 1];
         const nbx = Math.max(1, Math.ceil(prev.nbx / 2));
@@ -1221,7 +1242,7 @@ const flattenTreeFromLevels = (interiorLevels, solidStream, mixedStream, mixedMa
             numInteriorNodes: 0,
             numMixedLeaves: 0,
             nodes: new Uint32Array(0),
-            leafData: new Uint32Array(0)
+            leafData: new Uint32Array(0),
         };
     }
     const rootLevel = interiorLevels[interiorLevels.length - 1];
@@ -1273,7 +1294,7 @@ const flattenTreeFromLevels = (interiorLevels, solidStream, mixedStream, mixedMa
             }
             const level = interiorLevels[li];
             const type = level.types[ii];
-            if (type === 1 /* OctreeNodeType.Solid */) {
+            if (type === OctreeNodeType.Solid) {
                 nodes[emitPos] = SOLID_LEAF_MARKER;
             }
             else {
@@ -1295,7 +1316,7 @@ const flattenTreeFromLevels = (interiorLevels, solidStream, mixedStream, mixedMa
             if (nextChildStart > MAX_24BIT_OFFSET) {
                 throw new Error(`Sparse octree node count (${nextChildStart + 1}) exceeds the Laine-Karras 24-bit baseOffset limit (${MAX_24BIT_OFFSET + 1}). Reduce the grid size or split the scene.`);
             }
-            nodes[intPos[j]] = ((childMask & 0xFF) << 24) | nextChildStart;
+            nodes[intPos[j]] = ((childMask & 0xff) << 24) | nextChildStart;
             const myLi = intLi[j];
             const myMorton = interiorLevels[myLi].mortons[intIi[j]];
             const childMortonBase = myMorton * 8;
@@ -1304,8 +1325,12 @@ const flattenTreeFromLevels = (interiorLevels, solidStream, mixedStream, mixedMa
                 let sIdx = lowerBoundF64(solidStream, childMortonBase, nSolid);
                 let mIdx = lowerBoundF64(mixedStream, childMortonBase, nMixed);
                 while (true) {
-                    const sM = sIdx < nSolid && solidStream[sIdx] < childMortonEnd ? solidStream[sIdx] : Number.POSITIVE_INFINITY;
-                    const mM = mIdx < nMixed && mixedStream[mIdx] < childMortonEnd ? mixedStream[mIdx] : Number.POSITIVE_INFINITY;
+                    const sM = sIdx < nSolid && solidStream[sIdx] < childMortonEnd
+                        ? solidStream[sIdx]
+                        : Number.POSITIVE_INFINITY;
+                    const mM = mIdx < nMixed && mixedStream[mIdx] < childMortonEnd
+                        ? mixedStream[mIdx]
+                        : Number.POSITIVE_INFINITY;
                     if (!isFinite(sM) && !isFinite(mM)) {
                         break;
                     }
@@ -1356,7 +1381,7 @@ const flattenTreeFromLevels = (interiorLevels, solidStream, mixedStream, mixedMa
         numInteriorNodes,
         numMixedLeaves,
         nodes: emitPos === maxNodes ? nodes : nodes.slice(0, emitPos),
-        leafData: leafDataLen === leafData.length ? leafData : leafData.slice(0, leafDataLen)
+        leafData: leafDataLen === leafData.length ? leafData : leafData.slice(0, leafDataLen),
     };
 };
 const flattenDenseLevels = (levels, grid, gridBounds, sceneBounds, voxelResolution) => {
@@ -1366,8 +1391,15 @@ const flattenDenseLevels = (levels, grid, gridBounds, sceneBounds, voxelResoluti
     const rootType = readBlockType(rootLevel.types, 0);
     if (rootType === BLOCK_EMPTY) {
         return {
-            gridBounds, sceneBounds, voxelResolution, leafSize: LEAF_SIZE, treeDepth,
-            numInteriorNodes: 0, numMixedLeaves: 0, nodes: new Uint32Array(0), leafData: new Uint32Array(0)
+            gridBounds,
+            sceneBounds,
+            voxelResolution,
+            leafSize: LEAF_SIZE,
+            treeDepth,
+            numInteriorNodes: 0,
+            numMixedLeaves: 0,
+            nodes: new Uint32Array(0),
+            leafData: new Uint32Array(0),
         };
     }
     let nodes = new Uint32Array(Math.max(1024, Math.min(MAX_24BIT_OFFSET + 1, grid.masks.size * 3)));
@@ -1462,7 +1494,7 @@ const flattenDenseLevels = (levels, grid, gridBounds, sceneBounds, voxelResoluti
                     appendDenseNode(li - 1, childIdx, nextWave);
                 }
             }
-            nodes[curWave.pos[w]] = ((childMask & 0xFF) << 24) | childStart;
+            nodes[curWave.pos[w]] = ((childMask & 0xff) << 24) | childStart;
         }
         levels[currentLi] = null;
         const tmp = curWave;
@@ -1478,7 +1510,7 @@ const flattenDenseLevels = (levels, grid, gridBounds, sceneBounds, voxelResoluti
         numInteriorNodes,
         numMixedLeaves,
         nodes: nodes.slice(0, nodeLen),
-        leafData: leafData.slice(0, leafDataLen)
+        leafData: leafData.slice(0, leafDataLen),
     };
 };
 const buildSparseOctreeDense = (grid, gridBounds, sceneBounds, voxelResolution, maxDepth, consumeGrid) => {
@@ -1502,7 +1534,7 @@ export const buildSparseOctree = (grid, gridBounds, sceneBounds, voxelResolution
     const treeDepth = Math.max(1, Math.ceil(Math.log2(blocksPerAxis)));
     const lastWordIdx = gridTypes.length - 1;
     const lastLanes = totalBlocks - lastWordIdx * BLOCKS_PER_WORD;
-    const lastValidWordMask = lastLanes >= BLOCKS_PER_WORD ? 0xFFFFFFFF >>> 0 : ((1 << (lastLanes * 2)) - 1) >>> 0;
+    const lastValidWordMask = lastLanes >= BLOCKS_PER_WORD ? 0xffffffff >>> 0 : ((1 << (lastLanes * 2)) - 1) >>> 0;
     let nSolid = 0;
     let nMixed = 0;
     for (let w = 0; w < gridTypes.length; w++) {
@@ -1513,8 +1545,8 @@ export const buildSparseOctree = (grid, gridBounds, sceneBounds, voxelResolution
         if (word === 0) {
             continue;
         }
-        const solidMask = (word & EVEN_BITS) & ~((word >>> 1) & EVEN_BITS);
-        const mixedMask = ((word >>> 1) & EVEN_BITS) & ~(word & EVEN_BITS);
+        const solidMask = word & EVEN_BITS & ~((word >>> 1) & EVEN_BITS);
+        const mixedMask = (word >>> 1) & EVEN_BITS & ~(word & EVEN_BITS);
         nSolid += bitCount(solidMask >>> 0);
         nMixed += bitCount(mixedMask >>> 0);
     }
@@ -1528,7 +1560,7 @@ export const buildSparseOctree = (grid, gridBounds, sceneBounds, voxelResolution
             numInteriorNodes: 0,
             numMixedLeaves: 0,
             nodes: new Uint32Array(0),
-            leafData: new Uint32Array(0)
+            leafData: new Uint32Array(0),
         };
     }
     if (options.dense || shouldUseDenseMipBuild(totalBlocks, nSolid, nMixed)) {
@@ -1563,10 +1595,10 @@ export const buildSparseOctree = (grid, gridBounds, sceneBounds, voxelResolution
             const bz = (byBz / nby) | 0;
             const morton = encodeMorton3(bx, by, bz);
             const bt = (word >>> (lane << 1)) & TYPE_MASK;
-            if (bt === 1 /* OctreeNodeType.Solid */) {
+            if (bt === OctreeNodeType.Solid) {
                 solidStream[solidWriteIdx++] = morton;
             }
-            else if (bt === 2 /* OctreeNodeType.Mixed */) {
+            else if (bt === OctreeNodeType.Mixed) {
                 mixedStream[mixedWriteIdx] = morton;
                 const s = gridMasks.slot(blockIdx);
                 mixedMasks[mixedWriteIdx * 2] = gridMasks.lo[s];
@@ -1618,11 +1650,11 @@ export const buildSparseOctree = (grid, gridBounds, sceneBounds, voxelResolution
             }
             curMortons.push(parentMorton);
             if (allSolid && childCount === 8) {
-                curTypes.push(1 /* OctreeNodeType.Solid */);
+                curTypes.push(OctreeNodeType.Solid);
                 curChildMasks.push(0);
             }
             else {
-                curTypes.push(2 /* OctreeNodeType.Mixed */);
+                curTypes.push(OctreeNodeType.Mixed);
                 curChildMasks.push(childMask);
             }
         }
@@ -1650,8 +1682,8 @@ export const buildSparseOctree = (grid, gridBounds, sceneBounds, voxelResolution
                 let childCount = 0;
                 while (i < n && Math.floor(curMortons[i] / 8) === parentMorton) {
                     const octant = curMortons[i] % 8;
-                    childMask |= (1 << octant);
-                    if (curTypes[i] !== 1 /* OctreeNodeType.Solid */) {
+                    childMask |= 1 << octant;
+                    if (curTypes[i] !== OctreeNodeType.Solid) {
                         allSolid = false;
                     }
                     childCount++;
@@ -1659,11 +1691,11 @@ export const buildSparseOctree = (grid, gridBounds, sceneBounds, voxelResolution
                 }
                 nextMortons.push(parentMorton);
                 if (allSolid && childCount === 8) {
-                    nextTypes.push(1 /* OctreeNodeType.Solid */);
+                    nextTypes.push(OctreeNodeType.Solid);
                     nextChildMasks.push(0);
                 }
                 else {
-                    nextTypes.push(2 /* OctreeNodeType.Mixed */);
+                    nextTypes.push(OctreeNodeType.Mixed);
                     nextChildMasks.push(childMask);
                 }
             }
@@ -1679,4 +1711,4 @@ export const buildSparseOctree = (grid, gridBounds, sceneBounds, voxelResolution
     }
     return flattenTreeFromLevels(interiorLevels, solidStream, mixedStream, mixedMasks, nSolid, nMixed, gridBounds, sceneBounds, voxelResolution, actualDepth);
 };
-export { BLOCK_EMPTY, BLOCK_SOLID, BLOCK_MIXED, BLOCKS_PER_WORD, TYPE_MASK, EVEN_BITS, readBlockType, writeBlockType, SOLID_LO, SOLID_HI, SparseVoxelGrid };
+export { BLOCK_EMPTY, BLOCK_SOLID, BLOCK_MIXED, BLOCKS_PER_WORD, TYPE_MASK, EVEN_BITS, readBlockType, writeBlockType, SOLID_LO, SOLID_HI, SparseVoxelGrid, };

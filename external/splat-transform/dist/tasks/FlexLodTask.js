@@ -17,10 +17,20 @@ export class FlexLodTask extends BaseTask {
         sorted = sorted.subarray(0, target).sort((a, b) => a - b);
         const raw = new SplatData().init(target, splat.shDegree);
         const single = {
-            x: 0, y: 0, z: 0,
-            sx: 0, sy: 0, sz: 0,
-            qx: 0, qy: 0, qz: 0, qw: 0,
-            r: 0, g: 0, b: 0, a: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+            sx: 0,
+            sy: 0,
+            sz: 0,
+            qx: 0,
+            qy: 0,
+            qz: 0,
+            qw: 0,
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
             shN: new Array(splat.shCounts),
         };
         const shN = single.shN;

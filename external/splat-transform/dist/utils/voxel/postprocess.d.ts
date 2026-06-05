@@ -1,4 +1,4 @@
-import { BlockMaskBuffer, SparseVoxelGrid, type Bounds } from './common.js';
+import { BlockMaskBuffer, type SparseVoxelGrid, type Bounds } from './common.js';
 /**
  * Block cleanup pass:
  * - remove voxels that have no supporting 6-neighborhood occupancy

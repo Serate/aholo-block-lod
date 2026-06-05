@@ -1,10 +1,12 @@
 import { unzipSync, zipSync } from 'fflate';
 import { Buffer } from 'node:buffer';
 import { decodeWebP, encodeWebP, WebPLosslessProfile } from '../native/index.js';
+import { ColIdx } from '../SplatData.js';
 import { SH_C0, SH_MAPS, NUM_F_REST_TO_SH_DEGREE } from '../constant.js';
-import { getOrCreateDevice, kmeans, logger, mortonSort, quantize1d, isUrl, extractFromRootDir, clamp } from '../utils/index.js';
+import { getOrCreateDevice, kmeans, logger, mortonSort, quantize1d, isUrl, extractFromRootDir, clamp, } from '../utils/index.js';
 const ZIP_MAGIC = 0x04034b50;
 const PERM_TABLE = [
+    // original quat idx ---> actual storage idx
     [0, 1, 2, 3],
     [3, 1, 2, 0],
     [1, 3, 2, 0],
@@ -14,7 +16,6 @@ const TEMP_ROT = new Float32Array(4);
 function logTransform(value) {
     return Math.sign(value) * Math.log(Math.abs(value) + 1);
 }
-;
 function writeTableData(table, indices, width, height, channels = 4) {
     const data = new Uint8Array(width * height * channels);
     const numColumns = table.length;
@@ -92,7 +93,7 @@ export class SogFile {
         const setShFn = data.setShN.bind(data);
         const { meta, counts, shDegree, cached } = this;
         const [mean0, mean1, scale0, quat0, color0, centroids, labels] = cached.map(v => v.data);
-        const { means: { mins: [centerMinX, centerMinY, centerMinZ], maxs: [centerMaxX, centerMaxY, centerMaxZ] }, scales: { mins: [scaleMinX, scaleMinY, scaleMinZ], maxs: [scaleMaxX, scaleMaxY, scaleMaxZ] }, sh0: { mins: [colorMinR, colorMinG, colorMinB, colorMinA], maxs: [colorMaxR, colorMaxG, colorMaxB, colorMaxA], }, shN, } = meta;
+        const { means: { mins: [centerMinX, centerMinY, centerMinZ], maxs: [centerMaxX, centerMaxY, centerMaxZ], }, scales: { mins: [scaleMinX, scaleMinY, scaleMinZ], maxs: [scaleMaxX, scaleMaxY, scaleMaxZ], }, sh0: { mins: [colorMinR, colorMinG, colorMinB, colorMinA], maxs: [colorMaxR, colorMaxG, colorMaxB, colorMaxA], }, shN, } = meta;
         const rangeX = (centerMaxX - centerMinX) / 65535;
         const rangeY = (centerMaxY - centerMinY) / 65535;
         const rangeZ = (centerMaxZ - centerMinZ) / 65535;
@@ -116,10 +117,20 @@ export class SogFile {
             A_LUT[i] = 1.0 / (1.0 + Math.exp(-(colorMinA + colorRangeA * i)));
         }
         const single = {
-            x: 0, y: 0, z: 0,
-            sx: 0, sy: 0, sz: 0,
-            qx: 0, qy: 0, qz: 0, qw: 0,
-            r: 0, g: 0, b: 0, a: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+            sx: 0,
+            sy: 0,
+            sz: 0,
+            qx: 0,
+            qy: 0,
+            qz: 0,
+            qw: 0,
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
             shN: [],
         };
         for (let i = 0; i < counts; i++) {
@@ -182,10 +193,20 @@ export class SogFile {
         const rangeZ = (centerMaxZ - centerMinZ) / 65535;
         const SCALE_LUT = scaleCodebook.map(v => Math.exp(v));
         const single = {
-            x: 0, y: 0, z: 0,
-            sx: 0, sy: 0, sz: 0,
-            qx: 0, qy: 0, qz: 0, qw: 0,
-            r: 0, g: 0, b: 0, a: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+            sx: 0,
+            sy: 0,
+            sz: 0,
+            qx: 0,
+            qy: 0,
+            qz: 0,
+            qw: 0,
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
             shN: [],
         };
         for (let i = 0; i < counts; i++) {
@@ -256,10 +277,16 @@ export class SogFile {
         const BlockOffset = await data.initBlock(this.counts, this.shDegree);
         const { means, scales, quats, sh0, shN } = this.meta;
         this.cached = await Promise.all([
-            means.files[0], means.files[1],
-            scales.files[0], quats.files[0],
-            sh0.files[0], shN?.files[0], shN?.files[1],
-        ].filter(path => !!path).map(path => this.loadTexture(path)));
+            means.files[0],
+            means.files[1],
+            scales.files[0],
+            quats.files[0],
+            sh0.files[0],
+            shN?.files[0],
+            shN?.files[1],
+        ]
+            .filter(path => !!path)
+            .map(path => this.loadTexture(path)));
         if (this.version === 1) {
             this.parse_v1(data, BlockOffset);
         }
@@ -277,10 +304,20 @@ export class SogFile {
         const height = Math.ceil(counts / width / 4) * 4;
         const channels = 4;
         const single = {
-            x: 0, y: 0, z: 0,
-            sx: 0, sy: 0, sz: 0,
-            qx: 0, qy: 0, qz: 0, qw: 0,
-            r: 0, g: 0, b: 0, a: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+            sx: 0,
+            sy: 0,
+            sz: 0,
+            qx: 0,
+            qy: 0,
+            qz: 0,
+            qw: 0,
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
             shN: new Array(shCounts),
         };
         const webPProfile = new WebPLosslessProfile();
@@ -291,29 +328,26 @@ export class SogFile {
             means: {
                 mins: [],
                 maxs: [],
-                files: [
-                    'means_l.webp',
-                    'means_u.webp'
-                ]
+                files: ['means_l.webp', 'means_u.webp'],
             },
             scales: {
                 codebook: [],
-                files: ['scales.webp']
+                files: ['scales.webp'],
             },
             quats: {
-                files: ['quats.webp']
+                files: ['quats.webp'],
             },
             sh0: {
                 codebook: [],
-                files: ['sh0.webp']
-            }
+                files: ['sh0.webp'],
+            },
         };
         // means
         {
             logger.time('SOG encoding means');
-            const xCol = table[0 /* ColIdx.x */];
-            const yCol = table[1 /* ColIdx.y */];
-            const zCol = table[2 /* ColIdx.z */];
+            const xCol = table[ColIdx.x];
+            const yCol = table[ColIdx.y];
+            const zCol = table[ColIdx.z];
             // calculate minmax & transform
             let minX = Infinity;
             let minY = Infinity;
@@ -400,12 +434,12 @@ export class SogFile {
                     });
                 }
                 // scale by sqrt(2) to fit in [-1, 1] range
-                q.forEach((_, j) => q[j] *= Math.SQRT2);
+                q.forEach((_, j) => (q[j] *= Math.SQRT2));
                 const idx = [
                     [1, 2, 3],
                     [0, 2, 3],
                     [0, 1, 3],
-                    [0, 1, 2]
+                    [0, 1, 2],
                 ][maxComp];
                 quats[i * 4] = (q[idx[0]] * 0.5 + 0.5) * 255;
                 quats[i * 4 + 1] = (q[idx[1]] * 0.5 + 0.5) * 255;
@@ -418,7 +452,7 @@ export class SogFile {
         // scales
         {
             logger.time('SOG encoding scales');
-            const scaleData = quantize1d([table[3 /* ColIdx.sx */], table[4 /* ColIdx.sy */], table[5 /* ColIdx.sz */]], undefined, undefined, Math.log);
+            const scaleData = quantize1d([table[ColIdx.sx], table[ColIdx.sy], table[ColIdx.sz]], undefined, undefined, Math.log);
             const tableData = writeTableData(scaleData.labels, indices, width, height, channels);
             output['scales.webp'] = encodeWebP(tableData, width, height, webPProfile);
             meta.scales.codebook = Array.from(scaleData.centroids);
@@ -427,8 +461,8 @@ export class SogFile {
         // colors
         {
             logger.time('SOG encoding colors');
-            const colorData = quantize1d([table[10 /* ColIdx.r */], table[11 /* ColIdx.g */], table[12 /* ColIdx.b */]], undefined, undefined, v => (v - 0.5) / SH_C0);
-            const aCol = table[13 /* ColIdx.a */];
+            const colorData = quantize1d([table[ColIdx.r], table[ColIdx.g], table[ColIdx.b]], undefined, undefined, v => (v - 0.5) / SH_C0);
+            const aCol = table[ColIdx.a];
             const opacityData = new Uint8Array(aCol.length);
             for (let i = 0; i < counts; ++i) {
                 opacityData[i] = clamp(aCol[i] * 255, 0, 255);
@@ -445,7 +479,7 @@ export class SogFile {
             const shCoeffs = shCounts / 3;
             const shDataTable = [];
             for (const i of buildSHTableMap(shCoeffs)) {
-                shDataTable.push(table[14 /* ColIdx.shOffset */ + i]);
+                shDataTable.push(table[ColIdx.shOffset + i]);
             }
             const paletteSize = Math.min(64, 2 ** Math.floor(Math.log2(indices.length / 1024))) * 1024;
             const device = await getOrCreateDevice();
@@ -480,10 +514,7 @@ export class SogFile {
                 count: paletteSize,
                 bands: shDegree,
                 codebook: Array.from(codebook.centroids),
-                files: [
-                    'shN_centroids.webp',
-                    'shN_labels.webp'
-                ]
+                files: ['shN_centroids.webp', 'shN_labels.webp'],
             };
             logger.timeEnd(`SOG encoding SH${shDegree}`);
         }

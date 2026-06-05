@@ -1,6 +1,6 @@
 import type { Bounds } from './common.js';
 import type { Mesh } from './marching-cubes.js';
-import { SparseVoxelGrid } from './common.js';
+import { type SparseVoxelGrid } from './common.js';
 /**
  * Extract a watertight voxel-boundary mesh from a SparseVoxelGrid.
  *

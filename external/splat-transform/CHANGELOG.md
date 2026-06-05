@@ -1,5 +1,10 @@
 # ChangeLOG
 
+## DEV
+
+- 改进编码风格开启`verbatimModuleSyntax` & `isolatedModules`，迁移至`OXC`
+- 改进native模块加载方式
+
 ## 1.2.8
 
 - 升级`typescript@^6.0.3`
@@ -102,7 +107,7 @@
 
 - 支持流式解析和写入，减少内存占用
 - 支持`autoLod`对 3dgs 生成 lod 结果
-  - `splat-transform lod --type auto --ratio 0.3 simiao.ply simiao-lod.spz`
+    - `splat-transform lod --type auto --ratio 0.3 simiao.ply simiao-lod.spz`
 
 ## 1.0.1
 

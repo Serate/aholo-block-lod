@@ -1,9 +1,11 @@
 import { unzipSync, zipSync } from 'fflate';
+import { ColIdx } from '../SplatData.js';
 import { clamp, extractFromRootDir, isUrl, logger, mortonSort } from '../utils/index.js';
 import { decodeWebP, encodeWebP, WebPLosslessProfile } from '../native/index.js';
 import { SH_C0, SH_MAPS } from '../constant.js';
 const TEMP_ROT = new Array(4);
 const PERM_TABLE = [
+    // original quat idx ---> actual storage idx
     [0, 1, 2, 3],
     [3, 1, 2, 0],
     [1, 3, 2, 0],
@@ -15,7 +17,6 @@ const SH_SCALE2 = 1 << 4;
 function logTransform(value) {
     return Math.sign(value) * Math.log(Math.abs(value) + 1);
 }
-;
 export class EszFile {
     constructor() {
         this.counts = 0;
@@ -42,7 +43,7 @@ export class EszFile {
         if (!metaBuffer) {
             throw new Error('SOG meta.json not found in the zip archive.');
         }
-        const meta = this.meta = JSON.parse(new TextDecoder().decode(metaBuffer));
+        const meta = (this.meta = JSON.parse(new TextDecoder().decode(metaBuffer)));
         this.version = meta.version;
         this.counts = meta.counts;
         this.shDegree = meta.shDegree;
@@ -70,11 +71,9 @@ export class EszFile {
         await this.load(stream, contentLength);
         const offset = await data.initBlock(this.counts, this.shDegree);
         const { resources } = this.meta;
-        this.cached = await Promise.all([
-            resources.means_l, resources.means_u,
-            resources.scales, resources.quats,
-            resources.sh0, resources.shN,
-        ].filter(path => !!path).map(path => this.loadTexture(path)));
+        this.cached = await Promise.all([resources.means_l, resources.means_u, resources.scales, resources.quats, resources.sh0, resources.shN]
+            .filter(path => !!path)
+            .map(path => this.loadTexture(path)));
         const setFn = data.set.bind(data);
         const setShFn = data.setShN.bind(data);
         const SCALE_LUT = new Float32Array(256);
@@ -85,17 +84,27 @@ export class EszFile {
         for (let i = 0; i < 256; i++) {
             COLOR_LUT[i] = (i / 255 - 0.5) * COLOR_SCALE + 0.5;
         }
-        const { meta: { box }, counts, shDegree, cached } = this;
+        const { meta: { box }, counts, shDegree, cached, } = this;
         const [means_l, means_u, scales, quats, color, shN] = cached.map(v => v.data);
-        const { min: [centerMinX, centerMinY, centerMinZ], max: [centerMaxX, centerMaxY, centerMaxZ] } = box;
+        const { min: [centerMinX, centerMinY, centerMinZ], max: [centerMaxX, centerMaxY, centerMaxZ], } = box;
         const rangeX = (centerMaxX - centerMinX) / 65535;
         const rangeY = (centerMaxY - centerMinY) / 65535;
         const rangeZ = (centerMaxZ - centerMinZ) / 65535;
         const single = {
-            x: 0, y: 0, z: 0,
-            sx: 0, sy: 0, sz: 0,
-            qx: 0, qy: 0, qz: 0, qw: 0,
-            r: 0, g: 0, b: 0, a: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+            sx: 0,
+            sy: 0,
+            sz: 0,
+            qx: 0,
+            qy: 0,
+            qz: 0,
+            qw: 0,
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
             shN: [],
         };
         for (let i = 0; i < counts; i++) {
@@ -155,13 +164,16 @@ export class EszFile {
                 max: [-Infinity, -Infinity, -Infinity],
             },
             resources: {
-                means_l: 'means_l.webp', means_u: 'means_u.webp',
-                scales: 'scales.webp', quats: 'quats.webp', sh0: 'sh0.webp',
+                means_l: 'means_l.webp',
+                means_u: 'means_u.webp',
+                scales: 'scales.webp',
+                quats: 'quats.webp',
+                sh0: 'sh0.webp',
             },
         };
-        const xCol = table[0 /* ColIdx.x */];
-        const yCol = table[1 /* ColIdx.y */];
-        const zCol = table[2 /* ColIdx.z */];
+        const xCol = table[ColIdx.x];
+        const yCol = table[ColIdx.y];
+        const zCol = table[ColIdx.z];
         // calculate minmax & transform
         let minX = Infinity;
         let minY = Infinity;
@@ -226,9 +238,9 @@ export class EszFile {
         }
         {
             logger.time('ESZ encoding scales');
-            const sxCol = table[3 /* ColIdx.sx */];
-            const syCol = table[4 /* ColIdx.sy */];
-            const szCol = table[5 /* ColIdx.sz */];
+            const sxCol = table[ColIdx.sx];
+            const syCol = table[ColIdx.sy];
+            const szCol = table[ColIdx.sz];
             const scales = new Uint8Array(width * height * 4).fill(0xff);
             for (let i = 0; i < counts; i++) {
                 const idx = indices[i];
@@ -241,10 +253,10 @@ export class EszFile {
         }
         {
             logger.time('ESZ encoding quats');
-            const qxCol = table[6 /* ColIdx.qx */];
-            const qyCol = table[7 /* ColIdx.qy */];
-            const qzCol = table[8 /* ColIdx.qz */];
-            const qwCol = table[9 /* ColIdx.qw */];
+            const qxCol = table[ColIdx.qx];
+            const qyCol = table[ColIdx.qy];
+            const qzCol = table[ColIdx.qz];
+            const qwCol = table[ColIdx.qw];
             const quats = new Uint8Array(width * height * 4);
             for (let i = 0; i < counts; i++) {
                 const idx = indices[i];
@@ -252,7 +264,10 @@ export class EszFile {
                 TEMP_ROT[1] = qxCol[idx];
                 TEMP_ROT[2] = qyCol[idx];
                 TEMP_ROT[3] = qzCol[idx];
-                const l = Math.sqrt(TEMP_ROT[0] * TEMP_ROT[0] + TEMP_ROT[1] * TEMP_ROT[1] + TEMP_ROT[2] * TEMP_ROT[2] + TEMP_ROT[3] * TEMP_ROT[3]);
+                const l = Math.sqrt(TEMP_ROT[0] * TEMP_ROT[0] +
+                    TEMP_ROT[1] * TEMP_ROT[1] +
+                    TEMP_ROT[2] * TEMP_ROT[2] +
+                    TEMP_ROT[3] * TEMP_ROT[3]);
                 TEMP_ROT.forEach((v, j) => {
                     TEMP_ROT[j] = v / l;
                 });
@@ -262,12 +277,12 @@ export class EszFile {
                         TEMP_ROT[j] *= -1;
                     });
                 }
-                TEMP_ROT.forEach((_, j) => TEMP_ROT[j] *= Math.SQRT2);
+                TEMP_ROT.forEach((_, j) => (TEMP_ROT[j] *= Math.SQRT2));
                 const PERM = [
                     [1, 2, 3],
                     [0, 2, 3],
                     [0, 1, 3],
-                    [0, 1, 2]
+                    [0, 1, 2],
                 ][maxComp];
                 quats[i * 4] = (TEMP_ROT[PERM[0]] * 0.5 + 0.5) * 255;
                 quats[i * 4 + 1] = (TEMP_ROT[PERM[1]] * 0.5 + 0.5) * 255;
@@ -279,10 +294,10 @@ export class EszFile {
         }
         {
             logger.time('ESZ encoding sh0');
-            const rCol = table[10 /* ColIdx.r */];
-            const gCol = table[11 /* ColIdx.g */];
-            const bCol = table[12 /* ColIdx.b */];
-            const aCol = table[13 /* ColIdx.a */];
+            const rCol = table[ColIdx.r];
+            const gCol = table[ColIdx.g];
+            const bCol = table[ColIdx.b];
+            const aCol = table[ColIdx.a];
             const sh0 = new Uint8Array(width * height * 4).fill(0xff);
             for (let i = 0; i < counts; i++) {
                 const idx = indices[i];
@@ -306,9 +321,9 @@ export class EszFile {
                 const o = i * shCoeffs;
                 for (let j = 0; j < shCoeffs; j++) {
                     const scale = j < 3 ? SH_SCALE1 : SH_SCALE2;
-                    shN[(o + j) * 4 + 0] = clamp(Math.floor((Math.round(table[14 /* ColIdx.shOffset */ + (j * 3 + 0)][idx] * 128) + 128 + scale / 2) / scale) * scale, 0, 255);
-                    shN[(o + j) * 4 + 1] = clamp(Math.floor((Math.round(table[14 /* ColIdx.shOffset */ + (j * 3 + 1)][idx] * 128) + 128 + scale / 2) / scale) * scale, 0, 255);
-                    shN[(o + j) * 4 + 2] = clamp(Math.floor((Math.round(table[14 /* ColIdx.shOffset */ + (j * 3 + 2)][idx] * 128) + 128 + scale / 2) / scale) * scale, 0, 255);
+                    shN[(o + j) * 4 + 0] = clamp(Math.floor((Math.round(table[ColIdx.shOffset + (j * 3 + 0)][idx] * 128) + 128 + scale / 2) / scale) * scale, 0, 255);
+                    shN[(o + j) * 4 + 1] = clamp(Math.floor((Math.round(table[ColIdx.shOffset + (j * 3 + 1)][idx] * 128) + 128 + scale / 2) / scale) * scale, 0, 255);
+                    shN[(o + j) * 4 + 2] = clamp(Math.floor((Math.round(table[ColIdx.shOffset + (j * 3 + 2)][idx] * 128) + 128 + scale / 2) / scale) * scale, 0, 255);
                 }
             }
             output['shN.webp'] = encodeWebP(shN, shNWidth, shNHeight, webPProfile);

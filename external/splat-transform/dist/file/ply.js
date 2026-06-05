@@ -74,7 +74,11 @@ export class PlyFile {
     }
     initHeader(header) {
         let curElement;
-        const lines = header.trim().split('\n').map(v => v.trim()).filter(v => !!v);
+        const lines = header
+            .trim()
+            .split('\n')
+            .map(v => v.trim())
+            .filter(v => !!v);
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             if (i === 0) {
@@ -128,7 +132,7 @@ export class PlyFile {
             }
         }
         const { elements } = this;
-        const isSuperSplatCompressed = this.isSuperSplatCompressed = !!elements.chunk;
+        const isSuperSplatCompressed = (this.isSuperSplatCompressed = !!elements.chunk);
         this.counts = elements.vertex?.count ?? 0;
         const shElement = isSuperSplatCompressed ? elements.sh : elements.vertex;
         if (shElement) {
@@ -149,12 +153,24 @@ export class PlyFile {
             if (isSuperSplatCompressed) {
                 if (name === 'chunk') {
                     const { min_x, min_y, min_z, max_x, max_y, max_z, min_scale_x, min_scale_y, min_scale_z, max_scale_x, max_scale_y, max_scale_z, min_r, min_g, min_b, max_r, max_g, max_b, } = properties;
-                    if (!min_x || !min_y || !min_z ||
-                        !max_x || !max_y || !max_z ||
-                        !min_scale_x || !min_scale_y || !min_scale_z ||
-                        !max_scale_x || !max_scale_y || !max_scale_z ||
-                        !min_r || !min_g || !min_b ||
-                        !max_r || !max_g || !max_b) {
+                    if (!min_x ||
+                        !min_y ||
+                        !min_z ||
+                        !max_x ||
+                        !max_y ||
+                        !max_z ||
+                        !min_scale_x ||
+                        !min_scale_y ||
+                        !min_scale_z ||
+                        !max_scale_x ||
+                        !max_scale_y ||
+                        !max_scale_z ||
+                        !min_r ||
+                        !min_g ||
+                        !min_b ||
+                        !max_r ||
+                        !max_g ||
+                        !max_b) {
                         throw new Error('Missing Compressed PLY chunk properties');
                     }
                 }
@@ -168,10 +184,20 @@ export class PlyFile {
             else {
                 if (name === 'vertex') {
                     const { x, y, z, scale_0, scale_1, scale_2, rot_0, rot_1, rot_2, rot_3, f_dc_0, f_dc_1, f_dc_2, opacity, } = properties;
-                    if (!x || !y || !z ||
-                        !scale_0 || !scale_1 || !scale_2 ||
-                        !rot_0 || !rot_1 || !rot_2 || !rot_3 ||
-                        !f_dc_0 || !f_dc_1 || !f_dc_2 || !opacity) {
+                    if (!x ||
+                        !y ||
+                        !z ||
+                        !scale_0 ||
+                        !scale_1 ||
+                        !scale_2 ||
+                        !rot_0 ||
+                        !rot_1 ||
+                        !rot_2 ||
+                        !rot_3 ||
+                        !f_dc_0 ||
+                        !f_dc_1 ||
+                        !f_dc_2 ||
+                        !opacity) {
                         throw new Error('Missing PLY vertex properties');
                     }
                 }
@@ -188,10 +214,20 @@ export class PlyFile {
         let BlockOffset = 0;
         const chunks = [];
         const single = {
-            x: 0, y: 0, z: 0,
-            sx: 0, sy: 0, sz: 0,
-            qx: 0, qy: 0, qz: 0, qw: 0,
-            r: 0, g: 0, b: 0, a: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+            sx: 0,
+            sy: 0,
+            sz: 0,
+            qx: 0,
+            qy: 0,
+            qz: 0,
+            qw: 0,
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
             shN: [],
         };
         const initDecoder = () => {
@@ -205,7 +241,7 @@ export class PlyFile {
                 if (isSuperSplatCompressed) {
                     if (name === 'chunk') {
                         fn = (i, item) => {
-                            chunks[(i - BlockOffset)] = { ...item };
+                            chunks[i - BlockOffset] = { ...item };
                         };
                     }
                     else if (name === 'sh') {
@@ -295,7 +331,8 @@ export class PlyFile {
                     const idx = header.indexOf(HeaderTerminator);
                     if (idx >= 0) {
                         header = header.slice(0, idx + HeaderTerminator.length);
-                        reader.head -= HeaderReadBlockSize - (new TextEncoder().encode(header).length % HeaderReadBlockSize);
+                        reader.head -=
+                            HeaderReadBlockSize - (new TextEncoder().encode(header).length % HeaderReadBlockSize);
                         this.initHeader(header);
                         initDecoder();
                         BlockOffset = await data.initBlock(this.counts, this.shDegree);
@@ -339,16 +376,28 @@ export class PlyFile {
             new Array(shCounts).fill(0).map((_, i) => `property float f_rest_${i}`),
             'end_header',
             '',
-        ].flat().join('\n');
+        ]
+            .flat()
+            .join('\n');
         writer.write(new TextEncoder().encode(header));
         const ItemSize = 14 + shCounts;
         const chunkSize = 1024;
         const chunkCounts = Math.ceil(counts / chunkSize);
         const single = {
-            x: 0, y: 0, z: 0,
-            sx: 0, sy: 0, sz: 0,
-            qx: 0, qy: 0, qz: 0, qw: 0,
-            r: 0, g: 0, b: 0, a: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+            sx: 0,
+            sy: 0,
+            sz: 0,
+            qx: 0,
+            qy: 0,
+            qz: 0,
+            qw: 0,
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
             shN: new Array(shCounts),
         };
         const shN = single.shN;

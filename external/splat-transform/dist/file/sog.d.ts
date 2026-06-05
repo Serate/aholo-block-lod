@@ -1,5 +1,5 @@
-import { SplatData } from '../SplatData.js';
-import { IFile } from './IFile.js';
+import { type SplatData } from '../SplatData.js';
+import type { IFile } from './IFile.js';
 export interface SogMetadataV1 {
     version: undefined;
     means: {

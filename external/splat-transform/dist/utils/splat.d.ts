@@ -1,4 +1,4 @@
-import { IFile } from '../file/index.js';
+import { type IFile } from '../file/index.js';
 import { SplatData } from '../SplatData.js';
 export declare enum SplatFileType {
     PLY = 0,

@@ -78,7 +78,7 @@ export class AutoChunkLodTask extends BaseTask {
                             offset: v.offset,
                             count: v.counts,
                         };
-                    })
+                    }),
                 });
             }
         }
@@ -90,7 +90,7 @@ export class AutoChunkLodTask extends BaseTask {
             const levelCount = outputBlocks.map(block => block.lods[i].count).reduce((acc, i) => acc + i, 0);
             const levelStr = levelCount.toString().padStart(maxLength, ' ');
             maxLength = levelStr.length;
-            logger.info(`\tLevel ${i}${`(${(level.precision * 100).toFixed(2)}%)`.padStart(9, ' ')}: ${levelStr}${`(${(levelCount / splat.counts * 100).toFixed(2)}%)`.padStart(9, ' ')}`);
+            logger.info(`\tLevel ${i}${`(${(level.precision * 100).toFixed(2)}%)`.padStart(9, ' ')}: ${levelStr}${`(${((levelCount / splat.counts) * 100).toFixed(2)}%)`.padStart(9, ' ')}`);
         }
         resources.set(output, [
             {

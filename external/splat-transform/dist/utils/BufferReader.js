@@ -39,7 +39,7 @@ export class BufferReader {
     }
     read(counts) {
         const head = this.head;
-        const tail = this.head = head + counts;
+        const tail = (this.head = head + counts);
         return this.buffer.subarray(head, tail);
     }
 }

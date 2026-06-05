@@ -13,7 +13,6 @@ function initializeCentroids1D(data, centroids) {
         centroids[i] = sorted[index];
     }
 }
-;
 // use floyd's algorithm to pick m unique random indices from 0..n-1
 function pickRandomIndices(n, m) {
     const chosen = new Set();
@@ -23,7 +22,6 @@ function pickRandomIndices(n, m) {
     }
     return [...chosen];
 }
-;
 function initializeCentroids(dataTable, centroids) {
     const indices = pickRandomIndices(dataTable[0].length, centroids[0].length);
     for (let i = 0; i < centroids[0].length; i++) {
@@ -32,7 +30,6 @@ function initializeCentroids(dataTable, centroids) {
         }
     }
 }
-;
 const chunkSize = 128;
 const workgroupSize = 64;
 function clusterWgsl(numColumns) {
@@ -145,8 +142,7 @@ class GpuClustering {
         this.numCentroids = numCentroids;
         const workgroupsPerBatch = Math.min(device.limits.maxComputeWorkgroupsPerDimension, // device dispatch limit
         Math.floor(device.limits.maxBufferSize / (numColumns * workgroupSize * 4)), // point storage limit
-        Math.ceil(numPoints / workgroupSize) // max limit
-        );
+        Math.ceil(numPoints / workgroupSize));
         this.batchSize = workgroupsPerBatch * workgroupSize;
         this.numBatches = Math.ceil(numPoints / this.batchSize);
         this.concurrencyBatches = Math.min(MAX_CONCURRENCY_BATCHES, this.numBatches);
@@ -158,8 +154,8 @@ class GpuClustering {
             layout: 'auto',
             compute: {
                 module: shader,
-                entryPoint: 'main'
-            }
+                entryPoint: 'main',
+            },
         });
         const pointsBackBuffer = new Float32Array(numColumns * this.batchSize);
         const centroidsBackBuffer = new Float32Array(numColumns * numCentroids);
@@ -167,51 +163,56 @@ class GpuClustering {
         const pointsBuffers = [];
         const centroidsBuffer = device.createBuffer({
             size: centroidsBackBuffer.byteLength,
-            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
         });
         const uniformBuffer = device.createBuffer({
             size: 256 * this.concurrencyBatches,
-            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
         });
         const resultBuffer = device.createBuffer({
             size: this.concurrencyBatches * this.batchSize * 4,
-            usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.STORAGE
+            usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.STORAGE,
         });
         const resultReadBackBuffer = device.createBuffer({
             size: this.concurrencyBatches * this.batchSize * 4,
-            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
         });
         const layout = pipeline.getBindGroupLayout(0);
         const bindGroups = [];
         for (let i = 0; i < this.concurrencyBatches; i++) {
             const pointsBuffer = device.createBuffer({
                 size: pointsBackBuffer.byteLength,
-                usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE
+                usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
             });
             pointsBuffers.push(pointsBuffer);
             bindGroups.push(device.createBindGroup({
                 layout,
-                entries: [{
+                entries: [
+                    {
                         binding: 0,
                         resource: {
                             buffer: uniformBuffer,
                             offset: i * 256,
-                            size: 8
-                        }
-                    }, {
+                            size: 8,
+                        },
+                    },
+                    {
                         binding: 1,
                         resource: pointsBuffer,
-                    }, {
+                    },
+                    {
                         binding: 2,
                         resource: centroidsBuffer,
-                    }, {
+                    },
+                    {
                         binding: 3,
                         resource: {
                             buffer: resultBuffer,
                             offset: i * this.batchSize * 4,
-                            size: this.batchSize * 4
-                        }
-                    }]
+                            size: this.batchSize * 4,
+                        },
+                    },
+                ],
             }));
         }
         this.resource = {
@@ -234,7 +235,7 @@ class GpuClustering {
         logger.info(`GPU k-means kernel bootstrapped with batch ${workgroupsPerBatch}*${workgroupSize}*${this.numBatches}, concurrency: ${this.concurrencyBatches}, runs: ${this.concurrencyRuns}`);
     }
     async execute(points, centroids, labels) {
-        const { device, numPoints, numColumns, numCentroids, numBatches, batchSize, resource, concurrencyBatches, concurrencyRuns } = this;
+        const { device, numPoints, numColumns, numCentroids, numBatches, batchSize, resource, concurrencyBatches, concurrencyRuns, } = this;
         // upload centroid data to gpu
         interleaveData(resource.backBuffers.centroids, centroids, numCentroids, 0);
         device.queue.writeBuffer(resource.gpuBuffers.centroids, 0, resource.backBuffers.centroids.buffer);
@@ -278,7 +279,6 @@ class GpuClustering {
             labels.set(new Uint32Array(mapped, 0, resultCount), batchStart * batchSize);
             resource.gpuBuffers.resultReadBack.unmap();
         }
-        ;
     }
     destroy() {
         this.resource.gpuBuffers.uniform.destroy();
@@ -300,7 +300,6 @@ function groupLabels(labels, k) {
     }
     return clusters.map(c => new Uint32Array(c));
 }
-;
 // https://github.com/playcanvas/splat-transform/blob/main/src/lib/spatial/k-means.ts
 export async function kmeans(points, k, iterations, device) {
     const numRows = points.length > 0 ? points[0].length : 0;
@@ -310,7 +309,7 @@ export async function kmeans(points, k, iterations, device) {
             // use a typed array here so downstream code can rely on
             // labels supporting subarray(), even in this early-return
             // path used for very small datasets.
-            labels: new Uint32Array(numRows).map((_, i) => i)
+            labels: new Uint32Array(numRows).map((_, i) => i),
         };
     }
     const centroids = points.map(_ => new Float32Array(k));
@@ -336,6 +335,6 @@ export async function kmeans(points, k, iterations, device) {
     gpuClustering.destroy();
     return {
         centroids,
-        labels
+        labels,
     };
 }

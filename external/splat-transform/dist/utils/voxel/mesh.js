@@ -46,20 +46,20 @@ const encodeGlb = (positions, indices) => {
                 count: vertexCount,
                 type: 'VEC3',
                 min: [minX, minY, minZ],
-                max: [maxX, maxY, maxZ]
+                max: [maxX, maxY, maxZ],
             },
             {
                 bufferView: 1,
                 componentType: 5125,
                 count: indexCount,
-                type: 'SCALAR'
-            }
+                type: 'SCALAR',
+            },
         ],
         bufferViews: [
             { buffer: 0, byteOffset: 0, byteLength: positionsByteLength, target: 34962 },
-            { buffer: 0, byteOffset: positionsByteLength, byteLength: indicesByteLength, target: 34963 }
+            { buffer: 0, byteOffset: positionsByteLength, byteLength: indicesByteLength, target: 34963 },
         ],
-        buffers: [{ byteLength: totalBinSize }]
+        buffers: [{ byteLength: totalBinSize }],
     };
     const jsonBytes = new TextEncoder().encode(JSON.stringify(gltf));
     const jsonPadding = (4 - (jsonBytes.length % 4)) % 4;
@@ -71,7 +71,7 @@ const encodeGlb = (positions, indices) => {
     const view = new DataView(buffer);
     const bytes = new Uint8Array(buffer);
     let offset = 0;
-    view.setUint32(offset, 0x46546C67, true);
+    view.setUint32(offset, 0x46546c67, true);
     offset += 4;
     view.setUint32(offset, 2, true);
     offset += 4;
@@ -79,7 +79,7 @@ const encodeGlb = (positions, indices) => {
     offset += 4;
     view.setUint32(offset, jsonChunkLength, true);
     offset += 4;
-    view.setUint32(offset, 0x4E4F534A, true);
+    view.setUint32(offset, 0x4e4f534a, true);
     offset += 4;
     bytes.set(jsonBytes, offset);
     offset += jsonBytes.length;
@@ -88,7 +88,7 @@ const encodeGlb = (positions, indices) => {
     }
     view.setUint32(offset, binChunkLength, true);
     offset += 4;
-    view.setUint32(offset, 0x004E4942, true);
+    view.setUint32(offset, 0x004e4942, true);
     offset += 4;
     bytes.set(new Uint8Array(positions.buffer, positions.byteOffset, positionsByteLength), offset);
     offset += positionsByteLength;

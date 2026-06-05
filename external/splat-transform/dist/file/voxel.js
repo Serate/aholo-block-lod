@@ -1,11 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Buffer } from 'node:buffer';
+/**
+ * Portions of this voxel pipeline are adapted from:
+ * https://github.com/playcanvas/splat-transform
+ * Copyright (c) 2011-2026 PlayCanvas Ltd.
+ * Licensed under the MIT License.
+ */
+import { ColIdx } from '../SplatData.js';
 import { logger, cpuVoxelize, gpuVoxelize } from '../utils/index.js';
 import { fillExterior, fillFloor, carve } from '../utils/voxel/nav.js';
 import { buildCollisionMesh } from '../utils/voxel/mesh.js';
 import { cropToNavigable, cropToOccupied, filterAndFillBlocks } from '../utils/voxel/postprocess.js';
-import { alignGridBounds, ALPHA_THRESHOLD, BlockMaskBuffer, buildSparseOctree, decodeMorton3, encodeMorton3, extentsFromQuatScale, getChildOffset, SparseVoxelGrid } from '../utils/voxel/common.js';
+import { alignGridBounds, ALPHA_THRESHOLD, BlockMaskBuffer, buildSparseOctree, decodeMorton3, encodeMorton3, extentsFromQuatScale, getChildOffset, SparseVoxelGrid, } from '../utils/voxel/common.js';
 /**
  * Build a sparse voxel octree from gaussian splat data.
  *
@@ -37,20 +44,20 @@ const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, ba
         `floorFill=${floorFill}, floorFillDilation=${floorFillDilation}, cpuWorkerCount=${cpuWorkerCount === -1 ? 'auto' : cpuWorkerCount}, ` +
         `box=${JSON.stringify(box)}, navCapsule=${navCapsule ? JSON.stringify(navCapsule) : 'none'}, ` +
         `navSeed=${navSeed ? JSON.stringify(navSeed) : 'none'}, hasFillExterior=${hasFillExterior}, hasFloorFill=${hasFloorFill}, hasNav=${hasNav}`);
-    const xCol = data.table[0 /* ColIdx.x */];
-    const yCol = data.table[1 /* ColIdx.y */];
-    const zCol = data.table[2 /* ColIdx.z */];
-    const sxCol = data.table[3 /* ColIdx.sx */];
-    const syCol = data.table[4 /* ColIdx.sy */];
-    const szCol = data.table[5 /* ColIdx.sz */];
-    const qxCol = data.table[6 /* ColIdx.qx */];
-    const qyCol = data.table[7 /* ColIdx.qy */];
-    const qzCol = data.table[8 /* ColIdx.qz */];
-    const qwCol = data.table[9 /* ColIdx.qw */];
-    const aCol = data.table[13 /* ColIdx.a */];
+    const xCol = data.table[ColIdx.x];
+    const yCol = data.table[ColIdx.y];
+    const zCol = data.table[ColIdx.z];
+    const sxCol = data.table[ColIdx.sx];
+    const syCol = data.table[ColIdx.sy];
+    const szCol = data.table[ColIdx.sz];
+    const qxCol = data.table[ColIdx.qx];
+    const qyCol = data.table[ColIdx.qy];
+    const qzCol = data.table[ColIdx.qz];
+    const qwCol = data.table[ColIdx.qw];
+    const aCol = data.table[ColIdx.a];
     const sceneBounds = {
         min: { x: Infinity, y: Infinity, z: Infinity },
-        max: { x: -Infinity, y: -Infinity, z: -Infinity }
+        max: { x: -Infinity, y: -Infinity, z: -Infinity },
     };
     // Compute per-gaussian AABB extents from quaternion+scale and accumulate scene bounds.
     logger.time('Voxel bounding/extents');
@@ -82,37 +89,33 @@ const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, ba
     }
     logger.info(`scene extents: (${sceneBounds.min.x.toFixed(2)},${sceneBounds.min.y.toFixed(2)},${sceneBounds.min.z.toFixed(2)}) - (${sceneBounds.max.x.toFixed(2)},${sceneBounds.max.y.toFixed(2)},${sceneBounds.max.z.toFixed(2)})`);
     logger.timeEnd('Voxel bounding/extents');
-    const exteriorPad = hasFillExterior
-        ? (Math.ceil(navExteriorRadius / voxelResolution) + 1) * voxelResolution
-        : 0;
-    const floorPad = hasFloorFill
-        ? (Math.ceil(floorFillDilation / voxelResolution) + 1) * voxelResolution
-        : 0;
+    const exteriorPad = hasFillExterior ? (Math.ceil(navExteriorRadius / voxelResolution) + 1) * voxelResolution : 0;
+    const floorPad = hasFloorFill ? (Math.ceil(floorFillDilation / voxelResolution) + 1) * voxelResolution : 0;
     const padXZ = Math.max(exteriorPad, floorPad);
     const padY = exteriorPad;
     const rawVoxelBounds = {
         min: {
             x: sceneBounds.min.x - padXZ,
             y: sceneBounds.min.y - padY,
-            z: sceneBounds.min.z - padXZ
+            z: sceneBounds.min.z - padXZ,
         },
         max: {
             x: sceneBounds.max.x + padXZ,
             y: sceneBounds.max.y + padY,
-            z: sceneBounds.max.z + padXZ
-        }
+            z: sceneBounds.max.z + padXZ,
+        },
     };
     const voxelBounds = {
         min: {
             x: Math.max(rawVoxelBounds.min.x, box.minCorner[0]),
             y: Math.max(rawVoxelBounds.min.y, box.minCorner[1]),
-            z: Math.max(rawVoxelBounds.min.z, box.minCorner[2])
+            z: Math.max(rawVoxelBounds.min.z, box.minCorner[2]),
         },
         max: {
             x: Math.min(rawVoxelBounds.max.x, box.maxCorner[0]),
             y: Math.min(rawVoxelBounds.max.y, box.maxCorner[1]),
-            z: Math.min(rawVoxelBounds.max.z, box.maxCorner[2])
-        }
+            z: Math.min(rawVoxelBounds.max.z, box.maxCorner[2]),
+        },
     };
     const boxCropApplied = voxelBounds.min.x > rawVoxelBounds.min.x ||
         voxelBounds.min.y > rawVoxelBounds.min.y ||
@@ -127,7 +130,9 @@ const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, ba
             `cropped=(${voxelBounds.min.x.toFixed(2)},${voxelBounds.min.y.toFixed(2)},${voxelBounds.min.z.toFixed(2)})-` +
             `(${voxelBounds.max.x.toFixed(2)},${voxelBounds.max.y.toFixed(2)},${voxelBounds.max.z.toFixed(2)})`);
     }
-    if (voxelBounds.min.x >= voxelBounds.max.x || voxelBounds.min.y >= voxelBounds.max.y || voxelBounds.min.z >= voxelBounds.max.z) {
+    if (voxelBounds.min.x >= voxelBounds.max.x ||
+        voxelBounds.min.y >= voxelBounds.max.y ||
+        voxelBounds.min.z >= voxelBounds.max.z) {
         throw new Error(`voxel box does not overlap scene bounds: box=${JSON.stringify(box)}`);
     }
     // Align to 4x4x4 block grid.
@@ -199,7 +204,7 @@ const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, ba
     // Crop padded bounds before octree build.
     // If navigability passes ran, keep navigable extent; otherwise crop to occupied extent.
     logger.time('Crop voxel bounds');
-    const finalCrop = (hasFillExterior || hasFloorFill)
+    const finalCrop = hasFillExterior || hasFloorFill
         ? cropToNavigable(grid, navGridBounds, voxelResolution)
         : cropToOccupied(grid, navGridBounds, voxelResolution);
     grid = finalCrop.grid;
@@ -229,11 +234,11 @@ const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, ba
         version: '1.1',
         gridBounds: {
             min: [octree.gridBounds.min.x, octree.gridBounds.min.y, octree.gridBounds.min.z],
-            max: [octree.gridBounds.max.x, octree.gridBounds.max.y, octree.gridBounds.max.z]
+            max: [octree.gridBounds.max.x, octree.gridBounds.max.y, octree.gridBounds.max.z],
         },
         sceneBounds: {
             min: [octree.sceneBounds.min.x, octree.sceneBounds.min.y, octree.sceneBounds.min.z],
-            max: [octree.sceneBounds.max.x, octree.sceneBounds.max.y, octree.sceneBounds.max.z]
+            max: [octree.sceneBounds.max.x, octree.sceneBounds.max.y, octree.sceneBounds.max.z],
         },
         voxelResolution: octree.voxelResolution,
         leafSize: octree.leafSize,
@@ -242,7 +247,7 @@ const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, ba
         numMixedLeaves: octree.numMixedLeaves,
         nodeCount: octree.nodes.length,
         leafDataCount: octree.leafData.length,
-        files: ['voxel.bin']
+        files: ['voxel.bin'],
     };
     const binarySize = (octree.nodes.length + octree.leafData.length) * 4;
     const binary = new Uint8Array(binarySize);
@@ -276,5 +281,5 @@ export async function writeVoxelFiles(outputDir, data, options) {
 export const voxelUtils = {
     getChildOffset,
     encodeMorton3,
-    decodeMorton3
+    decodeMorton3,
 };

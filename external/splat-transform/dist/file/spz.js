@@ -144,10 +144,10 @@ export class SpzFile {
                                 if (j === largest) {
                                     continue;
                                 }
-                                const mag = temp & 0x1FF;
+                                const mag = temp & 0x1ff;
                                 const sign = (temp >>> 9) & 1;
                                 temp >>>= 10;
-                                const v = Math.SQRT1_2 * (mag / 0x1FF) * (sign ? -1 : 1);
+                                const v = Math.SQRT1_2 * (mag / 0x1ff) * (sign ? -1 : 1);
                                 rotation[j] = v;
                                 sum += v * v;
                             }
@@ -187,7 +187,9 @@ export class SpzFile {
             source = stream.getReader();
         }
         else {
-            source = stream.pipeThrough(new DecompressionStream('gzip')).getReader();
+            source = stream
+                .pipeThrough(new DecompressionStream('gzip'))
+                .getReader();
         }
         while (true) {
             const { done, value } = await source.read();
@@ -288,16 +290,28 @@ function createSpzEncodeContext(data, indices, fractionalBits, shCounts) {
         fraction: 1 << fractionalBits,
         shCounts,
         single: {
-            x: 0, y: 0, z: 0,
-            sx: 0, sy: 0, sz: 0,
-            qx: 0, qy: 0, qz: 0, qw: 0,
-            r: 0, g: 0, b: 0, a: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+            sx: 0,
+            sy: 0,
+            sz: 0,
+            qx: 0,
+            qy: 0,
+            qz: 0,
+            qw: 0,
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
             shN: new Array(shCounts),
         },
     };
 }
 function getSpzAttributes(shDegree) {
-    return shDegree > 0 ? ['position', 'alpha', 'color', 'scale', 'quat', 'sh'] : ['position', 'alpha', 'color', 'scale', 'quat'];
+    return shDegree > 0
+        ? ['position', 'alpha', 'color', 'scale', 'quat', 'sh']
+        : ['position', 'alpha', 'color', 'scale', 'quat'];
 }
 function getSpzAttributeInfo(attribute, shCounts) {
     switch (attribute) {

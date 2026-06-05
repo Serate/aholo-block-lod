@@ -1,4 +1,4 @@
-import { SparseVoxelGrid, type Bounds } from './common.js';
+import { type SparseVoxelGrid, type Bounds } from './common.js';
 /**
  * A simple triangle mesh with positions and indices.
  */

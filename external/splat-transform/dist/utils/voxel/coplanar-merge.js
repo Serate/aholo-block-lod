@@ -438,8 +438,7 @@ const coplanarMerge = (mesh, voxelResolution) => {
             next[i] = (i + 1) % n;
         }
         const isConvex = (a, b, c) => {
-            return (px[b] - px[a]) * (py[c] - py[a]) -
-                (py[b] - py[a]) * (px[c] - px[a]) > 0;
+            return (px[b] - px[a]) * (py[c] - py[a]) - (py[b] - py[a]) * (px[c] - px[a]) > 0;
         };
         const inTri = (p, a, b, c) => {
             const x = px[p], y = py[p];

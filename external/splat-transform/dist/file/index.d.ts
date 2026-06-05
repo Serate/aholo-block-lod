@@ -1,4 +1,4 @@
-export { IFile } from './IFile.js';
+export type { IFile } from './IFile.js';
 export { KsplatFile } from './ksplat.js';
 export { PlyFile } from './ply.js';
 export { SogFile } from './sog.js';

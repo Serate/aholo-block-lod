@@ -1,21 +1,21 @@
-import { BLOCK_EMPTY, BLOCK_SOLID, BLOCK_MIXED, SOLID_LO, SOLID_HI, SparseVoxelGrid, readBlockType, writeBlockType } from './common.js';
+import { BLOCK_EMPTY, BLOCK_SOLID, BLOCK_MIXED, SOLID_LO, SOLID_HI, SparseVoxelGrid, readBlockType, writeBlockType, } from './common.js';
 import { gpuDilate3 } from './gpu-dilation.js';
 import { logger } from '../Logger.js';
 const FACE_MASKS_LO = [
     0x11111111 >>> 0, // -X
     0x88888888 >>> 0, // +X
-    0x000F000F >>> 0, // -Y
-    0xF000F000 >>> 0, // +Y
-    0x0000FFFF >>> 0, // -Z
+    0x000f000f >>> 0, // -Y
+    0xf000f000 >>> 0, // +Y
+    0x0000ffff >>> 0, // -Z
     0x00000000 >>> 0, // +Z
 ];
 const FACE_MASKS_HI = [
     0x11111111 >>> 0,
     0x88888888 >>> 0,
-    0x000F000F >>> 0,
-    0xF000F000 >>> 0,
+    0x000f000f >>> 0,
+    0xf000f000 >>> 0,
     0x00000000 >>> 0,
-    0xFFFF0000 >>> 0,
+    0xffff0000 >>> 0,
 ];
 const forEachNonEmptyBlock = (grid, fn) => {
     const totalBlocks = grid.nbx * grid.nby * grid.nbz;
@@ -37,13 +37,13 @@ const forEachNonEmptyBlock = (grid, fn) => {
 function getActiveYZPairs(grid) {
     const pairs = new Set();
     const { nbx } = grid;
-    forEachNonEmptyBlock(grid, (blockIdx) => pairs.add((blockIdx / nbx) | 0));
+    forEachNonEmptyBlock(grid, blockIdx => pairs.add((blockIdx / nbx) | 0));
     return pairs;
 }
 function getActiveXZPairs(grid) {
     const pairs = new Set();
     const { nbx, bStride } = grid;
-    forEachNonEmptyBlock(grid, (blockIdx) => {
+    forEachNonEmptyBlock(grid, blockIdx => {
         const bx = blockIdx % nbx;
         const bz = (blockIdx / bStride) | 0;
         pairs.add(bx + bz * nbx);
@@ -53,7 +53,7 @@ function getActiveXZPairs(grid) {
 function getActiveXYPairs(grid) {
     const pairs = new Set();
     const { nbx, nby } = grid;
-    forEachNonEmptyBlock(grid, (blockIdx) => {
+    forEachNonEmptyBlock(grid, blockIdx => {
         const bx = blockIdx % nbx;
         const by = ((blockIdx / nbx) | 0) % nby;
         pairs.add(bx + by * nbx);
@@ -75,15 +75,15 @@ function extractLineX(grid, iy, iz, buf) {
         }
         let row4;
         if (bt === BLOCK_SOLID) {
-            row4 = 0xF;
+            row4 = 0xf;
         }
         else {
             const s = grid.masks.slot(blockIdx);
-            row4 = ((inHi ? grid.masks.hi[s] : grid.masks.lo[s]) >>> shift) & 0xF;
+            row4 = ((inHi ? grid.masks.hi[s] : grid.masks.lo[s]) >>> shift) & 0xf;
         }
         if (row4) {
             const ix = bx << 2;
-            buf[ix >>> 5] |= (row4 << (ix & 31));
+            buf[ix >>> 5] |= row4 << (ix & 31);
         }
     }
 }
@@ -95,7 +95,7 @@ function writeLineX(grid, iy, iz, buf) {
     const lineBase = by * grid.nbx + bz * grid.bStride;
     for (let bx = 0; bx < grid.nbx; bx++) {
         const ix = bx << 2;
-        const row4 = (buf[ix >>> 5] >>> (ix & 31)) & 0xF;
+        const row4 = (buf[ix >>> 5] >>> (ix & 31)) & 0xf;
         if (!row4) {
             continue;
         }
@@ -116,16 +116,20 @@ function extractLineY(grid, ix, iz, buf) {
         }
         let row4;
         if (bt === BLOCK_SOLID) {
-            row4 = 0xF;
+            row4 = 0xf;
         }
         else {
             const s = grid.masks.slot(blockIdx);
             const word = inHi ? grid.masks.hi[s] : grid.masks.lo[s];
-            row4 = ((word >>> base) & 1) | (((word >>> (base + 4)) & 1) << 1) | (((word >>> (base + 8)) & 1) << 2) | (((word >>> (base + 12)) & 1) << 3);
+            row4 =
+                ((word >>> base) & 1) |
+                    (((word >>> (base + 4)) & 1) << 1) |
+                    (((word >>> (base + 8)) & 1) << 2) |
+                    (((word >>> (base + 12)) & 1) << 3);
         }
         if (row4) {
             const iy = by << 2;
-            buf[iy >>> 5] |= (row4 << (iy & 31));
+            buf[iy >>> 5] |= row4 << (iy & 31);
         }
     }
 }
@@ -136,12 +140,15 @@ function writeLineY(grid, ix, iz, buf) {
     const base = lx + (lz & 1) * 16;
     for (let by = 0; by < grid.nby; by++) {
         const iy = by << 2;
-        const row4 = (buf[iy >>> 5] >>> (iy & 31)) & 0xF;
+        const row4 = (buf[iy >>> 5] >>> (iy & 31)) & 0xf;
         if (!row4) {
             continue;
         }
         const blockIdx = bx + by * grid.nbx + bz * grid.bStride;
-        const bits = ((row4 & 1) << base) | (((row4 >>> 1) & 1) << (base + 4)) | (((row4 >>> 2) & 1) << (base + 8)) | (((row4 >>> 3) & 1) << (base + 12));
+        const bits = ((row4 & 1) << base) |
+            (((row4 >>> 1) & 1) << (base + 4)) |
+            (((row4 >>> 2) & 1) << (base + 8)) |
+            (((row4 >>> 3) & 1) << (base + 12));
         grid.orBlock(blockIdx, inHi ? 0 : bits >>> 0, inHi ? bits >>> 0 : 0);
     }
 }
@@ -156,15 +163,19 @@ function extractLineZ(grid, ix, iy, buf) {
         }
         let row4;
         if (bt === BLOCK_SOLID) {
-            row4 = 0xF;
+            row4 = 0xf;
         }
         else {
             const s = grid.masks.slot(blockIdx);
-            row4 = ((grid.masks.lo[s] >>> base) & 1) | (((grid.masks.lo[s] >>> (base + 16)) & 1) << 1) | (((grid.masks.hi[s] >>> base) & 1) << 2) | (((grid.masks.hi[s] >>> (base + 16)) & 1) << 3);
+            row4 =
+                ((grid.masks.lo[s] >>> base) & 1) |
+                    (((grid.masks.lo[s] >>> (base + 16)) & 1) << 1) |
+                    (((grid.masks.hi[s] >>> base) & 1) << 2) |
+                    (((grid.masks.hi[s] >>> (base + 16)) & 1) << 3);
         }
         if (row4) {
             const iz = bz << 2;
-            buf[iz >>> 5] |= (row4 << (iz & 31));
+            buf[iz >>> 5] |= row4 << (iz & 31);
         }
     }
 }
@@ -173,23 +184,23 @@ function writeLineZ(grid, ix, iy, buf) {
     const base = (ix & 3) + ((iy & 3) << 2);
     for (let bz = 0; bz < grid.nbz; bz++) {
         const iz = bz << 2;
-        const row4 = (buf[iz >>> 5] >>> (iz & 31)) & 0xF;
+        const row4 = (buf[iz >>> 5] >>> (iz & 31)) & 0xf;
         if (!row4) {
             continue;
         }
         const blockIdx = bx + by * grid.nbx + bz * grid.bStride;
         let lo = 0, hi = 0;
         if (row4 & 1) {
-            lo |= (1 << base);
+            lo |= 1 << base;
         }
         if (row4 & 2) {
-            lo |= (1 << (base + 16));
+            lo |= 1 << (base + 16);
         }
         if (row4 & 4) {
-            hi |= (1 << base);
+            hi |= 1 << base;
         }
         if (row4 & 8) {
-            hi |= (1 << (base + 16));
+            hi |= 1 << (base + 16);
         }
         grid.orBlock(blockIdx, lo >>> 0, hi >>> 0);
     }
@@ -208,14 +219,14 @@ function flatDilate1D(src, dst, n, halfExtent) {
     }
     for (let i = 0; i < n; i++) {
         if (count > 0) {
-            dst[i >>> 5] |= (1 << (i & 31));
+            dst[i >>> 5] |= 1 << (i & 31);
         }
         const exitI = i - halfExtent;
-        if (exitI >= 0 && ((src[exitI >>> 5] >>> (exitI & 31)) & 1)) {
+        if (exitI >= 0 && (src[exitI >>> 5] >>> (exitI & 31)) & 1) {
             count--;
         }
         const enterI = i + halfExtent + 1;
-        if (enterI < n && ((src[enterI >>> 5] >>> (enterI & 31)) & 1)) {
+        if (enterI < n && (src[enterI >>> 5] >>> (enterI & 31)) & 1) {
             count++;
         }
     }
@@ -370,16 +381,14 @@ function sparseDilate3(src, halfExtentXZ, halfExtentY) {
     b.clear();
     return a;
 }
-const dilate3 = async (src, halfExtentXZ, halfExtentY, backend) => (backend === 'gpu'
-    ? gpuDilate3(src, halfExtentXZ, halfExtentY)
-    : sparseDilate3(src, halfExtentXZ, halfExtentY));
+const dilate3 = async (src, halfExtentXZ, halfExtentY, backend) => backend === 'gpu' ? gpuDilate3(src, halfExtentXZ, halfExtentY) : sparseDilate3(src, halfExtentXZ, halfExtentY);
 /**
  * Compute reachable empty voxels as visited \ blocked.
  * This keeps only flood-filled cells that are not blocked after dilation.
  */
 function computeEmptyGrid(visited, blocked) {
     const empty = new SparseVoxelGrid(visited.nx, visited.ny, visited.nz);
-    forEachNonEmptyBlock(visited, (blockIdx) => {
+    forEachNonEmptyBlock(visited, blockIdx => {
         const vbt = readBlockType(visited.types, blockIdx);
         let vLo, vHi;
         if (vbt === BLOCK_SOLID) {
@@ -417,7 +426,7 @@ function computeEmptyGrid(visited, blocked) {
  */
 function sparseOrGrids(a, b, consumeA = false) {
     const result = consumeA ? a : a.clone();
-    forEachNonEmptyBlock(b, (blockIdx) => {
+    forEachNonEmptyBlock(b, blockIdx => {
         const bt = readBlockType(b.types, blockIdx);
         if (bt === BLOCK_SOLID) {
             result.orBlock(blockIdx, SOLID_LO, SOLID_HI);
@@ -760,7 +769,7 @@ export async function fillExterior(gridOriginal, gridBounds, voxelResolution, di
     }
     for (let bz = 0; bz < nbz; bz++) {
         for (let by = 0; by < nby; by++) {
-            seedBoundaryBlock((nbx - 1) + by * nbx + bz * bStride, nbx - 1, by, bz, 1);
+            seedBoundaryBlock(nbx - 1 + by * nbx + bz * bStride, nbx - 1, by, bz, 1);
         }
     }
     for (let bz = 0; bz < nbz; bz++) {
@@ -839,7 +848,10 @@ export async function fillExterior(gridOriginal, gridBounds, voxelResolution, di
     }
     if (minIx > maxIx) {
         logger.warn('fillExteriorMap: no navigable cells remain, returning empty result');
-        return { grid: new SparseVoxelGrid(4, 4, 4), gridBounds: { min: { ...gridBounds.min }, max: { ...gridBounds.min } } };
+        return {
+            grid: new SparseVoxelGrid(4, 4, 4),
+            gridBounds: { min: { ...gridBounds.min }, max: { ...gridBounds.min } },
+        };
     }
     const MARGIN = 1;
     const cropMinBx = Math.max(0, (minIx >> 2) - MARGIN);
@@ -852,17 +864,20 @@ export async function fillExterior(gridOriginal, gridBounds, voxelResolution, di
     const croppedMin = {
         x: gridBounds.min.x + cropMinBx * blockSize,
         y: gridBounds.min.y + cropMinBy * blockSize,
-        z: gridBounds.min.z + cropMinBz * blockSize
+        z: gridBounds.min.z + cropMinBz * blockSize,
     };
     const croppedBounds = {
         min: croppedMin,
         max: {
             x: croppedMin.x + (cropMaxBx - cropMinBx) * blockSize,
             y: croppedMin.y + (cropMaxBy - cropMinBy) * blockSize,
-            z: croppedMin.z + (cropMaxBz - cropMinBz) * blockSize
-        }
+            z: croppedMin.z + (cropMaxBz - cropMinBz) * blockSize,
+        },
     };
-    return { grid: combined.cropTo(cropMinBx, cropMinBy, cropMinBz, cropMaxBx, cropMaxBy, cropMaxBz), gridBounds: croppedBounds };
+    return {
+        grid: combined.cropTo(cropMinBx, cropMinBy, cropMinBz, cropMaxBx, cropMaxBy, cropMaxBz),
+        gridBounds: croppedBounds,
+    };
 }
 /**
  * Carve navigable space for a capsule by:
@@ -922,7 +937,10 @@ export async function carve(grid, gridBounds, voxelResolution, capsuleHeight, ca
     const navBounds = navRegion.getOccupiedBlockBounds();
     if (!navBounds) {
         logger.warn('carve: no navigable cells remain, returning empty result');
-        return { grid: new SparseVoxelGrid(4, 4, 4), gridBounds: { min: { ...gridBounds.min }, max: { ...gridBounds.min } } };
+        return {
+            grid: new SparseVoxelGrid(4, 4, 4),
+            gridBounds: { min: { ...gridBounds.min }, max: { ...gridBounds.min } },
+        };
     }
     const MARGIN = 1;
     const cropMinBx = Math.max(0, navBounds.minBx - MARGIN);
@@ -935,17 +953,20 @@ export async function carve(grid, gridBounds, voxelResolution, capsuleHeight, ca
     const croppedMin = {
         x: gridBounds.min.x + cropMinBx * blockSize,
         y: gridBounds.min.y + cropMinBy * blockSize,
-        z: gridBounds.min.z + cropMinBz * blockSize
+        z: gridBounds.min.z + cropMinBz * blockSize,
     };
     const croppedBounds = {
         min: croppedMin,
         max: {
             x: croppedMin.x + (cropMaxBx - cropMinBx) * blockSize,
             y: croppedMin.y + (cropMaxBy - cropMinBy) * blockSize,
-            z: croppedMin.z + (cropMaxBz - cropMinBz) * blockSize
-        }
+            z: croppedMin.z + (cropMaxBz - cropMinBz) * blockSize,
+        },
     };
-    return { grid: navRegion.cropToInverted(cropMinBx, cropMinBy, cropMinBz, cropMaxBx, cropMaxBy, cropMaxBz), gridBounds: croppedBounds };
+    return {
+        grid: navRegion.cropToInverted(cropMinBx, cropMinBy, cropMinBz, cropMaxBx, cropMaxBy, cropMaxBz),
+        gridBounds: croppedBounds,
+    };
 }
 /**
  * Floor-fill via XZ dilate -> per-column upward walk -> XZ dilate -> OR.
@@ -965,7 +986,7 @@ export async function fillFloor(gridOriginal, gridBounds, voxelResolution, dilat
     const dilatedTypes = dilatedSolid.types;
     for (let bz = 0; bz < nbz; bz++) {
         for (let bx = 0; bx < nbx; bx++) {
-            let walking = 0xFFFF;
+            let walking = 0xffff;
             for (let by = 0; by < nby && walking; by++) {
                 const blockIdx = bx + by * nbx + bz * bStride;
                 const bt = readBlockType(dilatedTypes, blockIdx);
@@ -973,7 +994,7 @@ export async function fillFloor(gridOriginal, gridBounds, voxelResolution, dilat
                     break;
                 }
                 if (bt === BLOCK_EMPTY) {
-                    if (walking === 0xFFFF) {
+                    if (walking === 0xffff) {
                         foundEmpty.orBlock(blockIdx, SOLID_LO, SOLID_HI);
                     }
                     else {

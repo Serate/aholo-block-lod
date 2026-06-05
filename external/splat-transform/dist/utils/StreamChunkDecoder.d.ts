@@ -1,4 +1,4 @@
-import { BufferReader } from './BufferReader.js';
+import type { BufferReader } from './BufferReader.js';
 export interface ChunkDecoder {
     init(): [number, number];
     decode(offset: number, counts: number, buffer: Uint8Array): void;

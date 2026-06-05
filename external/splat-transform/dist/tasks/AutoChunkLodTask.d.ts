@@ -1,5 +1,5 @@
-import { Context, BaseTask } from './BaseTask.js';
-import { LevelParameter } from '../native/index.js';
+import { type Context, BaseTask } from './BaseTask.js';
+import { type LevelParameter } from '../native/index.js';
 export interface Config {
     input: string;
     output: string;

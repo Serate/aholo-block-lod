@@ -1,6 +1,6 @@
 import { unzipSync } from 'fflate';
 import { PlyFile, SpzFile, KsplatFile, SplatFile, SogFile, LccFile, EszFile } from '../file/index.js';
-import { SplatData } from '../SplatData.js';
+import { ColIdx, SplatData } from '../SplatData.js';
 import { SH_MAPS } from '../constant.js';
 export var SplatFileType;
 (function (SplatFileType) {
@@ -122,10 +122,20 @@ export function createSplatFile(path, buffer = new Uint8Array(), compressLevel =
 export function combineSplatData(source) {
     const target = new SplatData().init(source.reduce((p, c) => p + c.counts, 0), Math.max(...source.map(v => v.shDegree)));
     const single = {
-        x: 0, y: 0, z: 0,
-        sx: 0, sy: 0, sz: 0,
-        qx: 0, qy: 0, qz: 0, qw: 0,
-        r: 0, g: 0, b: 0, a: 0,
+        x: 0,
+        y: 0,
+        z: 0,
+        sx: 0,
+        sy: 0,
+        sz: 0,
+        qx: 0,
+        qy: 0,
+        qz: 0,
+        qw: 0,
+        r: 0,
+        g: 0,
+        b: 0,
+        a: 0,
         shN: new Array(SH_MAPS[target.shDegree]),
     };
     const shN = single.shN;
@@ -148,9 +158,9 @@ export function computeDenseBox(data, ratio = 0.98) {
     if (data.counts === 0) {
         return { min: [0, 0, 0], max: [0, 0, 0] };
     }
-    const xCol = data.table[0 /* ColIdx.x */];
-    const yCol = data.table[1 /* ColIdx.y */];
-    const zCol = data.table[2 /* ColIdx.z */];
+    const xCol = data.table[ColIdx.x];
+    const yCol = data.table[ColIdx.y];
+    const zCol = data.table[ColIdx.z];
     let minX = Infinity;
     let minY = Infinity;
     let minZ = Infinity;
@@ -251,16 +261,16 @@ export function computeDenseBox(data, ratio = 0.98) {
         count -= min;
     }
     return {
-        min: [(startX / scaleX) + minX, (startY / scaleY) + minY, (startZ / scaleZ) + minZ],
-        max: [(endX / scaleX) + minX, (endY / scaleY) + minY, (endZ / scaleZ) + minZ],
+        min: [startX / scaleX + minX, startY / scaleY + minY, startZ / scaleZ + minZ],
+        max: [endX / scaleX + minX, endY / scaleY + minY, endZ / scaleZ + minZ],
     };
 }
 // https://github.com/playcanvas/splat-transform/blob/main/src/lib/data-table/data-table.ts
 export function mortonSort(splat) {
     const result = new Uint32Array(splat.counts);
-    const xCol = splat.table[0 /* ColIdx.x */];
-    const yCol = splat.table[1 /* ColIdx.y */];
-    const zCol = splat.table[2 /* ColIdx.z */];
+    const xCol = splat.table[ColIdx.x];
+    const yCol = splat.table[ColIdx.y];
+    const zCol = splat.table[ColIdx.z];
     for (let i = 0; i < result.length; ++i) {
         result[i] = i;
     }
@@ -322,9 +332,9 @@ export function mortonSort(splat) {
         if (xlen === 0 && ylen === 0 && zlen === 0) {
             return;
         }
-        const xmul = (xlen === 0) ? 0 : 1024 / xlen;
-        const ymul = (ylen === 0) ? 0 : 1024 / ylen;
-        const zmul = (zlen === 0) ? 0 : 1024 / zlen;
+        const xmul = xlen === 0 ? 0 : 1024 / xlen;
+        const ymul = ylen === 0 ? 0 : 1024 / ylen;
+        const zmul = zlen === 0 ? 0 : 1024 / zlen;
         const morton = new Uint32Array(indices.length);
         for (let i = 0; i < indices.length; ++i) {
             const ri = indices[i];

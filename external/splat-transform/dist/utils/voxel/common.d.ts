@@ -159,4 +159,4 @@ export declare const buildSparseOctree: (grid: SparseVoxelGrid, gridBounds: Boun
     nodes: Uint32Array<ArrayBuffer>;
     leafData: Uint32Array<ArrayBuffer>;
 };
-export { BLOCK_EMPTY, BLOCK_SOLID, BLOCK_MIXED, BLOCKS_PER_WORD, TYPE_MASK, EVEN_BITS, readBlockType, writeBlockType, SOLID_LO, SOLID_HI, SparseVoxelGrid };
+export { BLOCK_EMPTY, BLOCK_SOLID, BLOCK_MIXED, BLOCKS_PER_WORD, TYPE_MASK, EVEN_BITS, readBlockType, writeBlockType, SOLID_LO, SOLID_HI, SparseVoxelGrid, };

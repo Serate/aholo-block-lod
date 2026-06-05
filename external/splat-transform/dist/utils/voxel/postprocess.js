@@ -2,16 +2,16 @@ import { BlockMaskBuffer, SOLID_HI, SOLID_LO } from './common.js';
 import { logger } from '../Logger.js';
 const FACE_X0 = 0x11111111;
 const FACE_X3 = 0x88888888;
-const FACE_Y0 = 0x000F000F;
-const FACE_Y3 = 0xF000F000;
-const FACE_Z0_LO = 0x0000FFFF;
-const FACE_Z3_HI = 0xFFFF0000 >>> 0;
+const FACE_Y0 = 0x000f000f;
+const FACE_Y3 = 0xf000f000;
+const FACE_Z0_LO = 0x0000ffff;
+const FACE_Z3_HI = 0xffff0000 >>> 0;
 /** Count set bits in a 32-bit unsigned integer. */
 const popcount = (n) => {
     n >>>= 0;
     n -= (n >>> 1) & 0x55555555;
     n = (n & 0x33333333) + ((n >>> 2) & 0x33333333);
-    return (((n + (n >>> 4)) & 0x0F0F0F0F) * 0x01010101) >>> 24;
+    return (((n + (n >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
 };
 const sortedUint32Has = (sorted, value) => {
     let lo = 0;
@@ -242,12 +242,30 @@ export const filterAndFillBlocks = (blocks, nbx = Infinity, nby = Infinity, nbz 
         let pzHi = origHi >>> 16;
         let mzLo = origLo << 16;
         let mzHi = (origHi << 16) | (origLo >>> 16);
-        addCrossFace(bx + 1, by, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_X3, FACE_X0, 3, true, pxLo, pxHi, (lo, hi) => { pxLo = lo; pxHi = hi; });
-        addCrossFace(bx - 1, by, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_X0, FACE_X3, 3, false, mxLo, mxHi, (lo, hi) => { mxLo = lo; mxHi = hi; });
-        addCrossFace(bx, by + 1, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_Y3, FACE_Y0, 12, true, pyLo, pyHi, (lo, hi) => { pyLo = lo; pyHi = hi; });
-        addCrossFace(bx, by - 1, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_Y0, FACE_Y3, 12, false, myLo, myHi, (lo, hi) => { myLo = lo; myHi = hi; });
-        addCrossFaceZ(bx, by, bz + 1, nbx, nby, nbz, hasSolid, getMixedIndex, masks, true, pzLo, pzHi, (lo, hi) => { pzLo = lo; pzHi = hi; });
-        addCrossFaceZ(bx, by, bz - 1, nbx, nby, nbz, hasSolid, getMixedIndex, masks, false, mzLo, mzHi, (lo, hi) => { mzLo = lo; mzHi = hi; });
+        addCrossFace(bx + 1, by, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_X3, FACE_X0, 3, true, pxLo, pxHi, (lo, hi) => {
+            pxLo = lo;
+            pxHi = hi;
+        });
+        addCrossFace(bx - 1, by, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_X0, FACE_X3, 3, false, mxLo, mxHi, (lo, hi) => {
+            mxLo = lo;
+            mxHi = hi;
+        });
+        addCrossFace(bx, by + 1, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_Y3, FACE_Y0, 12, true, pyLo, pyHi, (lo, hi) => {
+            pyLo = lo;
+            pyHi = hi;
+        });
+        addCrossFace(bx, by - 1, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_Y0, FACE_Y3, 12, false, myLo, myHi, (lo, hi) => {
+            myLo = lo;
+            myHi = hi;
+        });
+        addCrossFaceZ(bx, by, bz + 1, nbx, nby, nbz, hasSolid, getMixedIndex, masks, true, pzLo, pzHi, (lo, hi) => {
+            pzLo = lo;
+            pzHi = hi;
+        });
+        addCrossFaceZ(bx, by, bz - 1, nbx, nby, nbz, hasSolid, getMixedIndex, masks, false, mzLo, mzHi, (lo, hi) => {
+            mzLo = lo;
+            mzHi = hi;
+        });
         const neighborLo = pxLo | mxLo | pyLo | myLo | pzLo | mzLo;
         const neighborHi = pxHi | mxHi | pyHi | myHi | pzHi | mzHi;
         let lo = origLo & neighborLo;
@@ -292,7 +310,7 @@ export const cropBlocksToRange = (blocks, sourceNbx, sourceNby, cropMinBx, cropM
         if (bx >= cropMaxBx || by >= cropMaxBy || bz >= cropMaxBz) {
             continue;
         }
-        cropped.addBlock((bx - cropMinBx) + (by - cropMinBy) * outNbx + (bz - cropMinBz) * outNbx * outNby, SOLID_LO, SOLID_HI);
+        cropped.addBlock(bx - cropMinBx + (by - cropMinBy) * outNbx + (bz - cropMinBz) * outNbx * outNby, SOLID_LO, SOLID_HI);
     }
     const mixed = blocks.getMixedBlocks();
     for (let i = 0; i < mixed.blockIdx.length; i++) {
@@ -307,7 +325,7 @@ export const cropBlocksToRange = (blocks, sourceNbx, sourceNby, cropMinBx, cropM
         if (bx >= cropMaxBx || by >= cropMaxBy || bz >= cropMaxBz) {
             continue;
         }
-        cropped.addBlock((bx - cropMinBx) + (by - cropMinBy) * outNbx + (bz - cropMinBz) * outNbx * outNby, mixed.masks[i * 2], mixed.masks[i * 2 + 1]);
+        cropped.addBlock(bx - cropMinBx + (by - cropMinBy) * outNbx + (bz - cropMinBz) * outNbx * outNby, mixed.masks[i * 2], mixed.masks[i * 2 + 1]);
     }
     return cropped;
 };
@@ -317,15 +335,15 @@ export const cropBounds = (gridBounds, voxelResolution, cropMinBx, cropMinBy, cr
     const croppedMin = {
         x: gridBounds.min.x + cropMinBx * blockSize,
         y: gridBounds.min.y + cropMinBy * blockSize,
-        z: gridBounds.min.z + cropMinBz * blockSize
+        z: gridBounds.min.z + cropMinBz * blockSize,
     };
     return {
         min: croppedMin,
         max: {
             x: croppedMin.x + (cropMaxBx - cropMinBx) * blockSize,
             y: croppedMin.y + (cropMaxBy - cropMinBy) * blockSize,
-            z: croppedMin.z + (cropMaxBz - cropMinBz) * blockSize
-        }
+            z: croppedMin.z + (cropMaxBz - cropMinBz) * blockSize,
+        },
     };
 };
 /** Tight crop to occupied block bounds. */
@@ -344,7 +362,7 @@ export const cropToOccupied = (grid, gridBounds, voxelResolution) => {
     }
     return {
         grid: grid.cropTo(minBx, minBy, minBz, cropMaxBx, cropMaxBy, cropMaxBz),
-        gridBounds: cropBounds(gridBounds, voxelResolution, minBx, minBy, minBz, cropMaxBx, cropMaxBy, cropMaxBz)
+        gridBounds: cropBounds(gridBounds, voxelResolution, minBx, minBy, minBz, cropMaxBx, cropMaxBy, cropMaxBz),
     };
 };
 /** Tight crop to navigable (non-fully-solid) block bounds. */
@@ -365,11 +383,16 @@ export const cropToNavigable = (grid, gridBounds, voxelResolution) => {
     const cropMaxBx = Math.min(nbx, maxBx + 1 + MARGIN);
     const cropMaxBy = Math.min(nby, maxBy + 1 + MARGIN);
     const cropMaxBz = Math.min(nbz, maxBz + 1 + MARGIN);
-    if (cropMinBx === 0 && cropMinBy === 0 && cropMinBz === 0 && cropMaxBx === nbx && cropMaxBy === nby && cropMaxBz === nbz) {
+    if (cropMinBx === 0 &&
+        cropMinBy === 0 &&
+        cropMinBz === 0 &&
+        cropMaxBx === nbx &&
+        cropMaxBy === nby &&
+        cropMaxBz === nbz) {
         return { grid, gridBounds };
     }
     return {
         grid: grid.cropTo(cropMinBx, cropMinBy, cropMinBz, cropMaxBx, cropMaxBy, cropMaxBz),
-        gridBounds: cropBounds(gridBounds, voxelResolution, cropMinBx, cropMinBy, cropMinBz, cropMaxBx, cropMaxBy, cropMaxBz)
+        gridBounds: cropBounds(gridBounds, voxelResolution, cropMinBx, cropMinBy, cropMinBz, cropMaxBx, cropMaxBy, cropMaxBz),
     };
 };

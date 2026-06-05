@@ -234,16 +234,16 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     dst[outIdx] = output;
 }
 `;
-const makeBuffer = (device, size, usage) => (device.createBuffer({ size: Math.max(4, size), usage }));
+const makeBuffer = (device, size, usage) => device.createBuffer({ size: Math.max(4, size), usage });
 const writeUniform = (device, values) => {
     const buffer = makeBuffer(device, 256, GPU_BUFFER_USAGE_UNIFORM | GPU_BUFFER_USAGE_COPY_DST);
     device.queue.writeBuffer(buffer, 0, values.buffer, values.byteOffset, values.byteLength);
     return buffer;
 };
-const createStoragePipeline = (device, code) => (device.createComputePipeline({
+const createStoragePipeline = (device, code) => device.createComputePipeline({
     layout: 'auto',
-    compute: { module: device.createShaderModule({ code }), entryPoint: 'main' }
-}));
+    compute: { module: device.createShaderModule({ code }), entryPoint: 'main' },
+});
 const blockAlignedExtent = (halfExtent) => (halfExtent === 0 ? 0 : Math.ceil(halfExtent / 4) * 4);
 const chunkIsEmpty = (src, ox, oy, oz, cx, cy, cz) => {
     const minBx = Math.max(0, Math.floor(ox / 4));
@@ -378,7 +378,7 @@ class GpuDilation {
                 masksOutBuffer: makeBuffer(device, masksOutCapacity, GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_DST | GPU_BUFFER_USAGE_COPY_SRC),
                 capacity,
                 typesOutCapacity,
-                masksOutCapacity
+                masksOutCapacity,
             });
         }
     }
@@ -429,7 +429,7 @@ class GpuDilation {
             nby: src.nby,
             nbz: src.nbz,
             bStride: src.bStride,
-            capMinusOne: src.masks.keys.length - 1
+            capMinusOne: src.masks.keys.length - 1,
         };
     }
     releaseSrc() {
@@ -466,10 +466,18 @@ class GpuDilation {
             const encoder = this.device.createCommandEncoder();
             encoder.clearBuffer(slot.bufferA, 0, numWords * 4);
             const uniforms = new Uint32Array([
-                minBx >>> 0, minBy >>> 0, minBz >>> 0,
-                outerBx, outerBy, outerBz, numXWords,
-                this.srcMeta.nbx, this.srcMeta.nby, this.srcMeta.nbz,
-                this.srcMeta.bStride, this.srcMeta.capMinusOne
+                minBx >>> 0,
+                minBy >>> 0,
+                minBz >>> 0,
+                outerBx,
+                outerBy,
+                outerBz,
+                numXWords,
+                this.srcMeta.nbx,
+                this.srcMeta.nby,
+                this.srcMeta.nbz,
+                this.srcMeta.bStride,
+                this.srcMeta.capMinusOne,
             ]);
             const uniformBuffer = makeUniform(uniforms);
             const bindGroup = this.device.createBindGroup({
@@ -480,8 +488,8 @@ class GpuDilation {
                     { binding: 2, resource: { buffer: this.srcKeysBuffer } },
                     { binding: 3, resource: { buffer: this.srcLoBuffer } },
                     { binding: 4, resource: { buffer: this.srcHiBuffer } },
-                    { binding: 5, resource: { buffer: slot.bufferA } }
-                ]
+                    { binding: 5, resource: { buffer: slot.bufferA } },
+                ],
             });
             const pass = encoder.beginComputePass();
             pass.setPipeline(this.extractPipeline);
@@ -499,8 +507,8 @@ class GpuDilation {
                     entries: [
                         { binding: 0, resource: { buffer: uniformBuffer } },
                         { binding: 1, resource: { buffer: src } },
-                        { binding: 2, resource: { buffer: dst } }
-                    ]
+                        { binding: 2, resource: { buffer: dst } },
+                    ],
                 });
                 const pass = encoder.beginComputePass();
                 pass.setPipeline(pipeline);
@@ -512,17 +520,15 @@ class GpuDilation {
             dispatch(this.dilateYZPipeline, slot.bufferB, slot.bufferA, new Uint32Array([numXWords, outerNy, outerNz, halfExtentXZ, numXWords * outerNy, outerNz]), Math.ceil(numXWords / 8), Math.ceil(outerNy / 4), Math.ceil(outerNz / 8));
             dispatch(this.dilateYZPipeline, slot.bufferA, slot.bufferB, new Uint32Array([numXWords, outerNy, outerNz, halfExtentY, numXWords, outerNy]), Math.ceil(numXWords / 8), Math.ceil(outerNy / 4), Math.ceil(outerNz / 8));
             encoder.clearBuffer(slot.typesOutBuffer, 0, typesOutWords * 4);
-            const compactUniformBuffer = makeUniform(new Uint32Array([
-                haloBx, haloBy, haloBz, numXWords, innerBx, innerBy, innerBz, outerBy
-            ]));
+            const compactUniformBuffer = makeUniform(new Uint32Array([haloBx, haloBy, haloBz, numXWords, innerBx, innerBy, innerBz, outerBy]));
             const compactBindGroup = this.device.createBindGroup({
                 layout: this.compactPipeline.getBindGroupLayout(0),
                 entries: [
                     { binding: 0, resource: { buffer: compactUniformBuffer } },
                     { binding: 1, resource: { buffer: slot.bufferB } },
                     { binding: 2, resource: { buffer: slot.typesOutBuffer } },
-                    { binding: 3, resource: { buffer: slot.masksOutBuffer } }
-                ]
+                    { binding: 3, resource: { buffer: slot.masksOutBuffer } },
+                ],
             });
             const pass = encoder.beginComputePass();
             pass.setPipeline(this.compactPipeline);
@@ -641,7 +647,7 @@ export const gpuDilate3 = async (src, halfExtentXZ, halfExtentY) => {
                         cz,
                         innerNx,
                         innerNy,
-                        innerNz
+                        innerNz,
                     };
                     currentSlot = (currentSlot + 1) % GpuDilation.NUM_SLOTS;
                 }

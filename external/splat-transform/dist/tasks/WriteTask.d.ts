@@ -1,4 +1,4 @@
-import { Context, BaseTask } from './BaseTask.js';
+import { type Context, BaseTask } from './BaseTask.js';
 export interface Config {
     input: string;
     output: string;

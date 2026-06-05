@@ -4,7 +4,7 @@
  * Copyright (c) 2011-2026 PlayCanvas Ltd.
  * Licensed under the MIT License.
  */
-import { SplatData } from '../SplatData.js';
+import { type SplatData } from '../SplatData.js';
 import { type NavSeed } from '../utils/voxel/nav.js';
 import { type CollisionMeshShape } from '../utils/voxel/mesh.js';
 type VoxelBackend = 'cpu' | 'gpu';

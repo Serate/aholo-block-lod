@@ -308,9 +308,9 @@ const resolveCpuVoxelWorkerCount = (override) => {
         }
         return parsePositiveInteger(override) ?? Math.max(1, availableParallelism() - 1);
     }
-    return parsePositiveInteger(process.env.SPLAT_CPU_VOXEL_WORKERS) ??
+    return (parsePositiveInteger(process.env.SPLAT_CPU_VOXEL_WORKERS) ??
         parsePositiveInteger(process.env.CPU_VOXEL_WORKERS) ??
-        Math.max(1, availableParallelism() - 1);
+        Math.max(1, availableParallelism() - 1));
 };
 const cpuVoxelizeWorkerScript = `
 const { parentPort, workerData } = require('node:worker_threads');
@@ -499,12 +499,14 @@ const cpuVoxelizeSingleThread = (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, q
         if (opacity <= 0) {
             continue;
         }
-        if (xi < cullMinX || xi > cullMaxX ||
-            yi < cullMinY || yi > cullMaxY ||
-            zi < cullMinZ || zi > cullMaxZ) {
+        if (xi < cullMinX || xi > cullMaxX || yi < cullMinY || yi > cullMaxY || zi < cullMinZ || zi > cullMaxZ) {
             continue;
         }
-        const maxD2 = opacityThreshold <= 0 ? Infinity : (opacity <= opacityThreshold ? 0 : -2 * Math.log(opacityThreshold / opacity));
+        const maxD2 = opacityThreshold <= 0
+            ? Infinity
+            : opacity <= opacityThreshold
+                ? 0
+                : -2 * Math.log(opacityThreshold / opacity);
         if (maxD2 <= 0) {
             continue;
         }
@@ -615,7 +617,7 @@ export const cpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
         qzCol: toSharedFloat32(qzCol),
         qwCol: toSharedFloat32(qwCol),
         aCol: toSharedFloat32(aCol),
-        extents: toSharedFloat32(extents)
+        extents: toSharedFloat32(extents),
     };
     try {
         const output = new BlockMaskBuffer();
@@ -634,12 +636,12 @@ export const cpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
                     nBlockX,
                     nBlockY,
                     nBlockXY,
-                    ...shared
-                }
+                    ...shared,
+                },
             });
             let currentResolve;
             let currentReject;
-            worker.on('message', (message) => {
+            worker.on('message', message => {
                 if (message && typeof message === 'object' && 'packed' in message) {
                     const typed = message;
                     if (!currentResolve) {
@@ -659,12 +661,12 @@ export const cpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
                 currentReject = undefined;
                 resolve({ packed: message });
             });
-            worker.on('error', (error) => {
+            worker.on('error', error => {
                 currentReject?.(error);
                 currentResolve = undefined;
                 currentReject = undefined;
             });
-            worker.on('exit', (code) => {
+            worker.on('exit', code => {
                 if (code !== 0) {
                     currentReject?.(new Error(`cpu voxel worker exited with code ${code}`));
                     currentResolve = undefined;
@@ -686,7 +688,7 @@ export const cpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
                     taskId,
                     workerId: slotId,
                     batchSpecs: batchSpecsBuffer,
-                    candidateIndices: candidateIndicesBuffer
+                    candidateIndices: candidateIndicesBuffer,
                 }, [batchSpecsBuffer, candidateIndicesBuffer]);
             });
             return { worker, runTask };
@@ -700,7 +702,7 @@ export const cpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
         const availableSlots = pool.map((_slot, slotId) => Promise.resolve(slotId));
         const dispatchTask = async (batchSpecs, candidateIndices) => {
             const slotId = await Promise.race(availableSlots);
-            availableSlots[slotId] = pool[slotId].runTask(batchSpecs, candidateIndices).then((result) => {
+            availableSlots[slotId] = pool[slotId].runTask(batchSpecs, candidateIndices).then(result => {
                 addPackedResult(result.packed);
                 return slotId;
             });
@@ -778,7 +780,7 @@ export const cpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
         }));
         return output;
     }
-    catch (_e) {
+    catch {
         // Fallback when worker threads are unavailable or fail.
         return cpuVoxelizeSingleThread(xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, qyCol, qzCol, qwCol, aCol, extents, gridBounds, voxelResolution, opacityCutoff);
     }
@@ -822,20 +824,20 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
     }
     const batchCountPipeline = device.createComputePipeline({
         layout: 'auto',
-        compute: { module: device.createShaderModule({ code: buildPerBatchCountsWgsl() }), entryPoint: 'main' }
+        compute: { module: device.createShaderModule({ code: buildPerBatchCountsWgsl() }), entryPoint: 'main' },
     });
     const batchFillPipeline = device.createComputePipeline({
         layout: 'auto',
-        compute: { module: device.createShaderModule({ code: fillPerBatchCandidatesWgsl() }), entryPoint: 'main' }
+        compute: { module: device.createShaderModule({ code: fillPerBatchCandidatesWgsl() }), entryPoint: 'main' },
     });
     const voxelPipeline = device.createComputePipeline({
         layout: 'auto',
-        compute: { module: device.createShaderModule({ code: voxelizeMultiBatchWgsl() }), entryPoint: 'main' }
+        compute: { module: device.createShaderModule({ code: voxelizeMultiBatchWgsl() }), entryPoint: 'main' },
     });
     const blockBuffer = new BlockMaskBuffer();
     const gaussianBuffer = device.createBuffer({
         size: gaussianBufferBytes,
-        usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_DST
+        usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_DST,
     });
     const chunkRows = Math.min(gaussianCount, UPLOAD_CHUNK_GAUSSIANS);
     const interleavedChunk = new Float32Array(chunkRows * FLOATS_PER_GAUSSIAN);
@@ -871,15 +873,15 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
     }
     const batchUniformBuffer = device.createBuffer({
         size: 256,
-        usage: GPU_BUFFER_USAGE_UNIFORM | GPU_BUFFER_USAGE_COPY_DST
+        usage: GPU_BUFFER_USAGE_UNIFORM | GPU_BUFFER_USAGE_COPY_DST,
     });
     const batchCountsBuffer = device.createBuffer({
         size: Math.max(4, totalBatchCount * 4),
-        usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_DST | GPU_BUFFER_USAGE_COPY_SRC
+        usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_DST | GPU_BUFFER_USAGE_COPY_SRC,
     });
     const batchCountsReadBuffer = device.createBuffer({
         size: Math.max(4, totalBatchCount * 4),
-        usage: GPU_BUFFER_USAGE_COPY_DST | GPU_BUFFER_USAGE_MAP_READ
+        usage: GPU_BUFFER_USAGE_COPY_DST | GPU_BUFFER_USAGE_MAP_READ,
     });
     const batchUniformRaw = new Uint32Array(16);
     const batchUniformFloats = new Float32Array(batchUniformRaw.buffer);
@@ -897,8 +899,8 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
         entries: [
             { binding: 0, resource: { buffer: batchUniformBuffer } },
             { binding: 1, resource: { buffer: gaussianBuffer } },
-            { binding: 2, resource: { buffer: batchCountsBuffer } }
-        ]
+            { binding: 2, resource: { buffer: batchCountsBuffer } },
+        ],
     });
     const zeroBatchCounts = new Uint32Array(Math.max(1, totalBatchCount));
     device.queue.writeBuffer(batchCountsBuffer, 0, zeroBatchCounts);
@@ -933,18 +935,18 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
     }
     const batchOffsetsBuffer = device.createBuffer({
         size: batchCandidateOffsets.byteLength,
-        usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_DST
+        usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_DST,
     });
     device.queue.writeBuffer(batchOffsetsBuffer, 0, batchCandidateOffsets);
     const batchWriteHeadsBuffer = device.createBuffer({
         size: Math.max(4, totalBatchCount * 4),
-        usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_DST
+        usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_DST,
     });
     device.queue.writeBuffer(batchWriteHeadsBuffer, 0, zeroBatchCounts);
     // Packed gaussian indices for all batches (size = totalCandidateCount); filled by GPU scatter pass.
     const indexBuffer = device.createBuffer({
         size: totalCandidateCount * 4,
-        usage: GPU_BUFFER_USAGE_STORAGE
+        usage: GPU_BUFFER_USAGE_STORAGE,
     });
     // GPU scatter pass: write gaussian indices into each batch segment of `indexBuffer`.
     const fillBindGroup = device.createBindGroup({
@@ -954,8 +956,8 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
             { binding: 1, resource: { buffer: gaussianBuffer } },
             { binding: 2, resource: { buffer: batchOffsetsBuffer } },
             { binding: 3, resource: { buffer: batchWriteHeadsBuffer } },
-            { binding: 4, resource: { buffer: indexBuffer } }
-        ]
+            { binding: 4, resource: { buffer: indexBuffer } },
+        ],
     });
     {
         const encoder = device.createCommandEncoder();
@@ -971,19 +973,19 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
     const createSlot = () => {
         const uniformBuffer = device.createBuffer({
             size: 256,
-            usage: GPU_BUFFER_USAGE_UNIFORM | GPU_BUFFER_USAGE_COPY_DST
+            usage: GPU_BUFFER_USAGE_UNIFORM | GPU_BUFFER_USAGE_COPY_DST,
         });
         const resultsBuffer = device.createBuffer({
             size: MEGA_MAX_BATCHES * MAX_BLOCKS_PER_BATCH * 2 * 4,
-            usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_SRC | GPU_BUFFER_USAGE_COPY_DST
+            usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_SRC | GPU_BUFFER_USAGE_COPY_DST,
         });
         const readBuffer = device.createBuffer({
             size: MEGA_MAX_BATCHES * MAX_BLOCKS_PER_BATCH * 2 * 4,
-            usage: GPU_BUFFER_USAGE_COPY_DST | GPU_BUFFER_USAGE_MAP_READ
+            usage: GPU_BUFFER_USAGE_COPY_DST | GPU_BUFFER_USAGE_MAP_READ,
         });
         const batchInfoBuffer = device.createBuffer({
             size: MEGA_MAX_BATCHES * BATCH_INFO_U32S * 4,
-            usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_DST
+            usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_DST,
         });
         const bindGroup = device.createBindGroup({
             layout: voxelPipeline.getBindGroupLayout(0),
@@ -992,8 +994,8 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
                 { binding: 1, resource: { buffer: gaussianBuffer } },
                 { binding: 2, resource: { buffer: indexBuffer } },
                 { binding: 3, resource: { buffer: resultsBuffer } },
-                { binding: 4, resource: { buffer: batchInfoBuffer } }
-            ]
+                { binding: 4, resource: { buffer: batchInfoBuffer } },
+            ],
         });
         return {
             uniformBuffer,
@@ -1002,7 +1004,7 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
             batchInfoBuffer,
             bindGroup,
             resultsBufferSize: MEGA_MAX_BATCHES * MAX_BLOCKS_PER_BATCH * 2 * 4,
-            batchInfoCapacityBytes: MEGA_MAX_BATCHES * BATCH_INFO_U32S * 4
+            batchInfoCapacityBytes: MEGA_MAX_BATCHES * BATCH_INFO_U32S * 4,
         };
     };
     const slots = [createSlot(), createSlot()];
@@ -1018,11 +1020,11 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
             slot.resultsBufferSize = Math.max(slot.resultsBufferSize * 2, resultBytes);
             slot.resultsBuffer = device.createBuffer({
                 size: slot.resultsBufferSize,
-                usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_SRC | GPU_BUFFER_USAGE_COPY_DST
+                usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_SRC | GPU_BUFFER_USAGE_COPY_DST,
             });
             slot.readBuffer = device.createBuffer({
                 size: slot.resultsBufferSize,
-                usage: GPU_BUFFER_USAGE_COPY_DST | GPU_BUFFER_USAGE_MAP_READ
+                usage: GPU_BUFFER_USAGE_COPY_DST | GPU_BUFFER_USAGE_MAP_READ,
             });
             slot.bindGroup = device.createBindGroup({
                 layout: voxelPipeline.getBindGroupLayout(0),
@@ -1031,8 +1033,8 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
                     { binding: 1, resource: { buffer: gaussianBuffer } },
                     { binding: 2, resource: { buffer: indexBuffer } },
                     { binding: 3, resource: { buffer: slot.resultsBuffer } },
-                    { binding: 4, resource: { buffer: slot.batchInfoBuffer } }
-                ]
+                    { binding: 4, resource: { buffer: slot.batchInfoBuffer } },
+                ],
             });
         }
         if (batchInfoBytes > slot.batchInfoCapacityBytes) {
@@ -1041,7 +1043,7 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
             slot.batchInfoCapacityBytes = Math.max(slot.batchInfoCapacityBytes * 2, batchInfoBytes);
             slot.batchInfoBuffer = device.createBuffer({
                 size: slot.batchInfoCapacityBytes,
-                usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_DST
+                usage: GPU_BUFFER_USAGE_STORAGE | GPU_BUFFER_USAGE_COPY_DST,
             });
             slot.bindGroup = device.createBindGroup({
                 layout: voxelPipeline.getBindGroupLayout(0),
@@ -1050,8 +1052,8 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
                     { binding: 1, resource: { buffer: gaussianBuffer } },
                     { binding: 2, resource: { buffer: indexBuffer } },
                     { binding: 3, resource: { buffer: slot.resultsBuffer } },
-                    { binding: 4, resource: { buffer: slot.batchInfoBuffer } }
-                ]
+                    { binding: 4, resource: { buffer: slot.batchInfoBuffer } },
+                ],
             });
         }
     };
@@ -1069,7 +1071,10 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
                 const localX = blockIdx % batch.numBlocksX;
                 const localY = Math.floor(blockIdx / batch.numBlocksX) % batch.numBlocksY;
                 const localZ = Math.floor(blockIdx / (batch.numBlocksX * batch.numBlocksY));
-                const blockLinear = (batch.bx + localX) + (batch.by + localY) * numBlocksX + (batch.bz + localZ) * numBlocksX * numBlocksY;
+                const blockLinear = batch.bx +
+                    localX +
+                    (batch.by + localY) * numBlocksX +
+                    (batch.bz + localZ) * numBlocksX * numBlocksY;
                 blockBuffer.addBlock(blockLinear, maskLo, maskHi);
             }
         }
@@ -1162,7 +1167,7 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
                     numBlocksZ: currBatchZ,
                     bx: bxBlock,
                     by: byBlock,
-                    bz: bzBlock
+                    bz: bzBlock,
                 });
                 megaIndexSpan += indexCount;
                 if (pendingBatches.length >= MEGA_MAX_BATCHES || megaIndexSpan >= MEGA_MAX_INDICES) {

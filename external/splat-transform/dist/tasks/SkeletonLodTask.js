@@ -1,4 +1,4 @@
-import { SplatData } from '../SplatData.js';
+import { ColIdx, SplatData } from '../SplatData.js';
 import { BaseTask } from './BaseTask.js';
 const VOXEL_CHUNK_SIZE = 0.02;
 const VOXEL_CHUNK_SCALE = 1.3;
@@ -9,9 +9,9 @@ export class SkeletonLodTask extends BaseTask {
         logger.info(`loaded -> "${input}"`);
         const target = Math.min(Math.ceil(splat.counts * ratio), counts);
         logger.info(`expected -> ${target}(${((target / splat.counts) * 100).toFixed(2)}%) | ratio=${ratio} counts=${counts}`);
-        const xCol = splat.table[0 /* ColIdx.x */];
-        const yCol = splat.table[1 /* ColIdx.y */];
-        const zCol = splat.table[2 /* ColIdx.z */];
+        const xCol = splat.table[ColIdx.x];
+        const yCol = splat.table[ColIdx.y];
+        const zCol = splat.table[ColIdx.z];
         let minX = Infinity;
         let minY = Infinity;
         let minZ = Infinity;
@@ -47,7 +47,7 @@ export class SkeletonLodTask extends BaseTask {
         const mergeChucks = [];
         for (let i = 0; i < chunks.length; i++) {
             const chunk = chunks[i];
-            const size = Math.max(1, Math.ceil((chunk.length ** VOXEL_CHUNK_SCALE) / CHUNK_RATIO));
+            const size = Math.max(1, Math.ceil(chunk.length ** VOXEL_CHUNK_SCALE / CHUNK_RATIO));
             if (size === 1) {
                 mergeChucks.push(chunk);
                 continue;
@@ -115,17 +115,37 @@ export class SkeletonLodTask extends BaseTask {
         }
         const raw = new SplatData().init(mergeChucks.length, 0);
         const result = {
-            x: 0, y: 0, z: 0,
-            sx: 0.005, sy: 0.005, sz: 0.005,
-            qx: 0, qy: 0, qz: 0, qw: 1,
-            r: 0, g: 0, b: 0, a: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+            sx: 0.005,
+            sy: 0.005,
+            sz: 0.005,
+            qx: 0,
+            qy: 0,
+            qz: 0,
+            qw: 1,
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
             shN: [],
         };
         const single = {
-            x: 0, y: 0, z: 0,
-            sx: 0, sy: 0, sz: 0,
-            qx: 0, qy: 0, qz: 0, qw: 0,
-            r: 0, g: 0, b: 0, a: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+            sx: 0,
+            sy: 0,
+            sz: 0,
+            qx: 0,
+            qy: 0,
+            qz: 0,
+            qw: 0,
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
             shN: [],
         };
         for (let i = 0; i < mergeChucks.length; i++) {

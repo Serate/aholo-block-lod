@@ -1,33 +1,23 @@
-import * as child_process from 'node:child_process';
-import * as path from 'node:path';
-import * as os from 'node:os';
 import { createRequire } from 'node:module';
 import { SplatData } from '../SplatData.js';
 import { Buffer } from 'node:buffer';
+import { isMusl } from './utils.js';
+import p from '../../package.json' with { type: 'json' };
 const getModule = (function () {
     let m = undefined;
     const require = createRequire(import.meta.url);
-    const platform = os.platform();
-    const binaryPath = `./cpp/bin/${platform === 'win32' ? 'windows' : platform}/binding.node`;
+    const names = p.name.split('/');
+    let runtime = undefined;
+    if (process.platform === 'win32') {
+        runtime = 'msvc';
+    }
+    else if (process.platform === 'linux') {
+        runtime = isMusl() ? 'musl' : 'gnu';
+    }
+    const binaryPackage = `${names[0]}/${names[1].startsWith('aholo') ? 'aholo-' : ''}splat-transform-${process.platform}-${process.arch}${runtime ? `-${runtime}` : ''}`;
     return function () {
         if (!m) {
-            try {
-                m = require(binaryPath);
-            }
-            catch {
-                console.warn(`cannot find a valid binary at: ${binaryPath}, try rebuild`);
-                child_process.spawnSync('node', [
-                    require.resolve('cmake-js/bin/cmake-js'),
-                    'build',
-                    '--',
-                    '--preset',
-                    'default'
-                ], {
-                    cwd: path.join(import.meta.dirname, 'cpp'),
-                    stdio: 'inherit'
-                });
-                m = require(binaryPath);
-            }
+            m = require(binaryPackage);
         }
         return m;
     };
@@ -36,10 +26,12 @@ export function generateLod(splat, levelParameters, blockPrecision, minSize, max
     if (splat.counts === 0) {
         return {
             splats: [splat],
-            blocks: [{
+            blocks: [
+                {
                     box: { min: [0, 0, 0], max: [0, 0, 0] },
                     refs: new Array(levelParameters.length).fill(0),
-                }],
+                },
+            ],
         };
     }
     const levels = levelParameters.length;
@@ -53,7 +45,7 @@ export function generateLod(splat, levelParameters, blockPrecision, minSize, max
             parameters[i * 2 + 1] = scaleBoost;
         }
     }
-    const { blockBoxes, blockRefs, gaussianCount, data, } = getModule().generate_lod(inputBuffers, splat.shCounts, buffer, blockPrecision, minSize, maxStep);
+    const { blockBoxes, blockRefs, gaussianCount, data } = getModule().generate_lod(inputBuffers, splat.shCounts, buffer, blockPrecision, minSize, maxStep);
     const blockView = new Float32Array(blockBoxes.buffer, blockBoxes.byteOffset, blockBoxes.byteLength / 4);
     const blockRefsView = new Uint32Array(blockRefs.buffer, blockRefs.byteOffset, blockRefs.byteLength / 4);
     const blockCount = blockView.length / 6;
@@ -77,7 +69,7 @@ export function generateLod(splat, levelParameters, blockPrecision, minSize, max
         const block = {
             box: {
                 min: [blockView[i * 6], blockView[i * 6 + 1], blockView[i * 6 + 2]],
-                max: [blockView[i * 6 + 3], blockView[i * 6 + 4], blockView[i * 6 + 5]]
+                max: [blockView[i * 6 + 3], blockView[i * 6 + 4], blockView[i * 6 + 5]],
             },
             refs: Array.from(blockRefsView.subarray(i * levels, i * levels + levels)),
         };
@@ -95,7 +87,6 @@ export class WebPQualityProfile {
         this.quality = quality;
         this.lossless = false;
     }
-    ;
 }
 export function encodeWebP(data, width, height, profile) {
     const buffer = data instanceof Buffer ? data : Buffer.from(data.buffer, data.byteOffset, data.byteLength);
@@ -115,14 +106,17 @@ export function encodeAVIF(data, width, height, quality) {
     return getModule().avif_encode_rgba(buffer, width, height, quality);
 }
 export function encodeAVIFBatched(inputs) {
-    return getModule().avif_encode_rgba_batched(inputs.map(i => ({ ...i, data: i.data instanceof Buffer ? i.data : Buffer.from(i.data.buffer, i.data.byteOffset, i.data.byteLength) })));
+    return getModule().avif_encode_rgba_batched(inputs.map(i => ({
+        ...i,
+        data: i.data instanceof Buffer ? i.data : Buffer.from(i.data.buffer, i.data.byteOffset, i.data.byteLength),
+    })));
 }
 export function decodeAVIF(data) {
     const buffer = data instanceof Buffer ? data : Buffer.from(data.buffer, data.byteOffset, data.byteLength);
     return getModule().avif_decode_rgba(buffer);
 }
 export function decodeAVIFBatched(inputs) {
-    return getModule().avif_decode_rgba_batched(inputs.map(i => i instanceof Buffer ? i : Buffer.from(i.buffer, i.byteOffset, i.byteLength)));
+    return getModule().avif_decode_rgba_batched(inputs.map(i => (i instanceof Buffer ? i : Buffer.from(i.buffer, i.byteOffset, i.byteLength))));
 }
 export function clusterAverage(dataTable, clusters, output) {
     return getModule().cluster_average(dataTable.map(t => Buffer.from(t.buffer, t.byteOffset, t.byteLength)), clusters.map(t => Buffer.from(t.buffer, t.byteOffset, t.byteLength)), output.map(t => Buffer.from(t.buffer, t.byteOffset, t.byteLength)));

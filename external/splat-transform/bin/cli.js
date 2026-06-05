@@ -14,15 +14,12 @@ SUPPORTED OUTPUTS
     .ply   .spz   .uspz   .splat   .sog   .esz
 `;
 
-program
-    .name(packageJson.name)
-    .version(packageJson.version)
-    .addHelpText('beforeAll', ExtraText);
+program.name(packageJson.name).version(packageJson.version).addHelpText('beforeAll', ExtraText);
 
 program
     .description('Execute a task pipeline from configuration file')
     .argument('<path>', 'pipeline config filepath')
-    .action((path) => {
+    .action(path => {
         const content = fs.readFileSync(path, { encoding: 'utf-8' });
         runner(JSON.parse(content));
     });
@@ -72,7 +69,11 @@ program
             version: 1,
             tasks: [
                 { id: '0', type: 'Read', config: { inputs: [input], output: 'cache0' } },
-                { id: '1', type: 'FlexLod', config: { input: 'cache0', output: 'cache0', ratio: arg.ratio, scorePath: arg.score } },
+                {
+                    id: '1',
+                    type: 'FlexLod',
+                    config: { input: 'cache0', output: 'cache0', ratio: arg.ratio, scorePath: arg.score },
+                },
                 { id: '2', type: 'Write', config: { input: 'cache0', output: output } },
             ],
         });
@@ -95,7 +96,9 @@ program
         });
     });
 
-const fileTypeOption = program.createOption('-t, --type <type>', 'output file type').choices(['ply', 'spz', 'splat', 'sog']);
+const fileTypeOption = program
+    .createOption('-t, --type <type>', 'output file type')
+    .choices(['ply', 'spz', 'splat', 'sog']);
 fileTypeOption.required = true;
 program
     .command('lod:auto-chunk')
@@ -109,7 +112,11 @@ program
             version: 1,
             tasks: [
                 { id: '0', type: 'Read', config: { inputs: [input], output: 'cache0' } },
-                { id: '1', type: 'AutoChunkLod', config: { input: 'cache0', output: 'cache0', type: arg.type, maxChunkCounts: arg.maxChunkCounts } },
+                {
+                    id: '1',
+                    type: 'AutoChunkLod',
+                    config: { input: 'cache0', output: 'cache0', type: arg.type, maxChunkCounts: arg.maxChunkCounts },
+                },
                 { id: '2', type: 'Write', config: { input: 'cache0', output: output } },
             ],
         });
