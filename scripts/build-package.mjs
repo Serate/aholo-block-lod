@@ -132,7 +132,7 @@ async function bundleRuntime() {
     }
 }
 
-function emitPackageDeclarations(tsconfigPath) {
+function emitPackageDeclarations() {
     runCommandOrExit(
         process.execPath,
         [
