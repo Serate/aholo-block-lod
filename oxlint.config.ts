@@ -10,7 +10,7 @@ export default defineConfig({
         '.github/*',
         '**/build/**',
         '**/dist/**',
-        '**/bin/*',
+        '**/bin/**',
         '**/scripts/**',
         // website
         '**/.astro/**',
