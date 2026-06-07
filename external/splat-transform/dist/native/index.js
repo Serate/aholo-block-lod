@@ -6,7 +6,6 @@ import p from '../../package.json' with { type: 'json' };
 const getModule = (function () {
     let m = undefined;
     const require = createRequire(import.meta.url);
-    const names = p.name.split('/');
     let runtime = undefined;
     if (process.platform === 'win32') {
         runtime = 'msvc';
@@ -14,7 +13,7 @@ const getModule = (function () {
     else if (process.platform === 'linux') {
         runtime = isMusl() ? 'musl' : 'gnu';
     }
-    const binaryPackage = `${names[0]}/${names[1].startsWith('aholo') ? 'aholo-' : ''}splat-transform-${process.platform}-${process.arch}${runtime ? `-${runtime}` : ''}`;
+    const binaryPackage = `${p.name}-${process.platform}-${process.arch}${runtime ? `-${runtime}` : ''}`;
     return function () {
         if (!m) {
             m = require(binaryPackage);
