@@ -60,7 +60,7 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
     let vSize = 0;
     let vKeys = new Float64Array(vCap).fill(-1);
     let vVals = new Uint32Array(vCap);
-    const vGrow = () => {
+    function vGrow() {
         const oldKeys = vKeys;
         const oldVals = vVals;
         const oldCap = vCap;
@@ -80,12 +80,12 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             vKeys[i] = k;
             vVals[i] = oldVals[j];
         }
-    };
+    }
     let oCap = 1 << 14;
     let oMask = oCap - 1;
     let oSize = 0;
     let oKeys = new Float64Array(oCap).fill(-1);
-    const oGrow = () => {
+    function oGrow() {
         const oldKeys = oKeys;
         const oldCap = oCap;
         oCap *= 2;
@@ -102,7 +102,7 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             }
             oKeys[i] = k;
         }
-    };
+    }
     // Growable typed-array buffers. Capacity doubles on demand to avoid
     // the GC churn of pushing into JS number[] for huge meshes.
     let posCap = 1024;
@@ -135,7 +135,7 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
     // isOccupiedLocal so it can fold the per-corner block lookup into a
     // direct typed-array index instead of a hash lookup.
     let bx = 0, by = 0, bz = 0;
-    const isOccupiedLocal = (cx, cy, cz) => {
+    function isOccupiedLocal(cx, cy, cz) {
         if (cx < 0 || cy < 0 || cz < 0) {
             return false;
         }
@@ -150,8 +150,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
         const lo = neighborMasks[idx * 2];
         const hi = neighborMasks[idx * 2 + 1];
         return isVoxelSet(lo, hi, cx & 3, cy & 3, cz & 3);
-    };
-    const addPosition = (px, py, pz) => {
+    }
+    function addPosition(px, py, pz) {
         if (posLen + 3 > posCap) {
             posCap *= 2;
             const grown = new Float32Array(posCap);
@@ -163,8 +163,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
         positions[posLen++] = py;
         positions[posLen++] = pz;
         return idx;
-    };
-    const ensureIndexCapacity = (additional) => {
+    }
+    function ensureIndexCapacity(additional) {
         if (idxLen + additional <= idxCap) {
             return;
         }
@@ -174,13 +174,13 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
         const grown = new Uint32Array(idxCap);
         grown.set(indices);
         indices = grown;
-    };
-    const appendTri = (a, b, c) => {
+    }
+    function appendTri(a, b, c) {
         ensureIndexCapacity(3);
         indices[idxLen++] = a;
         indices[idxLen++] = b;
         indices[idxLen++] = c;
-    };
+    }
     // When flat MC face cells are merged into large rectangles, rectangle
     // boundaries must still be split at any neighbouring raw-MC vertex that
     // lies along the same edge. Otherwise the pre-merged mesh can contain
@@ -189,7 +189,7 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
     // midpoints are odd on the crossed edge axis.
     const splitLinePoints = mergeFlatFaces ? new Map() : undefined;
     let collectSplitPoints = mergeFlatFaces;
-    const splitLineKey = (varAxis, x2, y2, z2) => {
+    function splitLineKey(varAxis, x2, y2, z2) {
         const x = x2 + scaledCoordOffset;
         const y = y2 + scaledCoordOffset;
         const z = z2 + scaledCoordOffset;
@@ -200,8 +200,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             return (x * scaledCoordStride + z) * 3 + 1;
         }
         return (x * scaledCoordStride + y) * 3 + 2;
-    };
-    const addSplitLinePoint = (key, value) => {
+    }
+    function addSplitLinePoint(key, value) {
         if (!splitLinePoints) {
             return;
         }
@@ -211,8 +211,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             splitLinePoints.set(key, points);
         }
         points.push(value);
-    };
-    const addSplitPointForVertex = (vx, vy, vz, axis) => {
+    }
+    function addSplitPointForVertex(vx, vy, vz, axis) {
         if (!splitLinePoints || !collectSplitPoints) {
             return;
         }
@@ -222,10 +222,10 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
         addSplitLinePoint(splitLineKey(0, x2, y2, z2), x2);
         addSplitLinePoint(splitLineKey(1, x2, y2, z2), y2);
         addSplitLinePoint(splitLineKey(2, x2, y2, z2), z2);
-    };
+    }
     // Get or create a vertex at the midpoint of an edge.
     // Edge is identified by the lower corner voxel coordinate and axis (0=x, 1=y, 2=z).
-    const getVertex = (vx, vy, vz, axis) => {
+    function getVertex(vx, vy, vz, axis) {
         // Pack (vx, vy, vz, axis) into a single key. Offset by 1 so that
         // vx = -1 (from the boundary extension) maps to 0, keeping keys non-negative.
         const key = (vx + 1 + (vy + 1) * strideX + (vz + 1) * strideXY) * 3 + axis;
@@ -263,7 +263,7 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             vGrow();
         }
         return idx;
-    };
+    }
     // Full-face MC cases can be merged before vertex creation. Encode each
     // unit face cell as a sortable integer in Float64: bucket / plane / u / v,
     // where bucket = axis*2 + positiveNormalBit and coordinates are offset by
@@ -277,7 +277,7 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
     let diagCellCap = 0;
     let diagCellLen = 0;
     let diagCellKeys = new Float64Array(0);
-    const addFaceCell = (bucket, p, u, v) => {
+    function addFaceCell(bucket, p, u, v) {
         if (faceCellLen === faceCellCap) {
             faceCellCap = faceCellCap === 0 ? 1024 : faceCellCap * 2;
             const grown = new Float64Array(faceCellCap);
@@ -286,8 +286,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
         }
         faceCellKeys[faceCellLen++] =
             ((bucket * faceCoordStride + (p + 1)) * faceCoordStride + (u + 1)) * faceCoordStride + (v + 1);
-    };
-    const addDiagCell = (bucket, plane, u, e) => {
+    }
+    function addDiagCell(bucket, plane, u, e) {
         if (diagCellLen === diagCellCap) {
             diagCellCap = diagCellCap === 0 ? 1024 : diagCellCap * 2;
             const grown = new Float64Array(diagCellCap);
@@ -298,8 +298,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             ((bucket * diagCoordStride + (plane + diagCoordOffset)) * diagCoordStride + (u + diagCoordOffset)) *
                 diagCoordStride +
                 (e + diagCoordOffset);
-    };
-    const collectFlatFace = (cubeIndex, vx, vy, vz) => {
+    }
+    function collectFlatFace(cubeIndex, vx, vy, vz) {
         if (!mergeFlatFaces) {
             return false;
         }
@@ -325,8 +325,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             default:
                 return false;
         }
-    };
-    const scaledFacePoint = (axis, p, u, v) => {
+    }
+    function scaledFacePoint(axis, p, u, v) {
         if (axis === 0) {
             return [p * 2 + 1, u * 2, v * 2];
         }
@@ -334,13 +334,13 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             return [u * 2, p * 2 + 1, v * 2];
         }
         return [u * 2, v * 2, p * 2 + 1];
-    };
-    const diagBucket = (axisA, axisB, signA, signB) => {
+    }
+    function diagBucket(axisA, axisB, signA, signB) {
         const pair = axisA === 0 ? (axisB === 1 ? 0 : 1) : 2;
         const signBits = (signA > 0 ? 1 : 0) | (signB > 0 ? 2 : 0);
         return pair * 4 + signBits;
-    };
-    const decodeDiagBucket = (bucket) => {
+    }
+    function decodeDiagBucket(bucket) {
         const pair = (bucket / 4) | 0;
         const signBits = bucket & 3;
         const signA = (signBits & 1) !== 0 ? 1 : -1;
@@ -352,8 +352,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             return { axisA: 0, axisB: 2, axisE: 1, signA, signB };
         }
         return { axisA: 1, axisB: 2, axisE: 0, signA, signB };
-    };
-    const coordByAxis = (x, y, z, axis) => {
+    }
+    function coordByAxis(x, y, z, axis) {
         if (axis === 0) {
             return x;
         }
@@ -361,16 +361,16 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             return y;
         }
         return z;
-    };
-    const diagPoint = (bucket, plane, u, e) => {
+    }
+    function diagPoint(bucket, plane, u, e) {
         const { axisA, axisB, axisE, signA, signB } = decodeDiagBucket(bucket);
         const out = [0, 0, 0];
         out[axisA] = signA * ((plane + u) / 2);
         out[axisB] = signB * ((plane - u) / 2);
         out[axisE] = e;
         return [out[0], out[1], out[2]];
-    };
-    const edgeScaledPoint = (edge, vx, vy, vz, out, offset) => {
+    }
+    function edgeScaledPoint(edge, vx, vy, vz, out, offset) {
         const x = vx * 2;
         const y = vy * 2;
         const z = vz * 2;
@@ -436,11 +436,13 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
                 out[offset + 2] = z + 1;
                 break;
         }
-    };
+    }
     const pairVerts = new Int32Array(18);
     const uniqueVerts = new Int32Array(12);
-    const samePoint = (src, a, b) => src[a] === src[b] && src[a + 1] === src[b + 1] && src[a + 2] === src[b + 2];
-    const pointInUnique = (x, y, z, uniqueCount) => {
+    function samePoint(src, a, b) {
+        return src[a] === src[b] && src[a + 1] === src[b + 1] && src[a + 2] === src[b + 2];
+    }
+    function pointInUnique(x, y, z, uniqueCount) {
         for (let i = 0; i < uniqueCount; i++) {
             const o = i * 3;
             if (uniqueVerts[o] === x && uniqueVerts[o + 1] === y && uniqueVerts[o + 2] === z) {
@@ -448,8 +450,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             }
         }
         return false;
-    };
-    const collectDiagPair = (triRow, triA, triB, vx, vy, vz) => {
+    }
+    function collectDiagPair(triRow, triA, triB, vx, vy, vz) {
         const edgesA = triA * 3;
         const edgesB = triB * 3;
         edgeScaledPoint(triRow[edgesA], vx, vy, vz, pairVerts, 0);
@@ -588,8 +590,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
         }
         addDiagCell(bucket, plane, minU, minE);
         return true;
-    };
-    const collectDiagFaces = (triRow, vx, vy, vz) => {
+    }
+    function collectDiagFaces(triRow, vx, vy, vz) {
         if (!mergeFlatFaces) {
             return 0;
         }
@@ -610,8 +612,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             }
         }
         return usedMask;
-    };
-    const getScaledVertex = (x2, y2, z2) => {
+    }
+    function getScaledVertex(x2, y2, z2) {
         if ((x2 & 1) !== 0) {
             return getVertex((x2 - 1) / 2, y2 / 2, z2 / 2, 0);
         }
@@ -619,12 +621,12 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             return getVertex(x2 / 2, (y2 - 1) / 2, z2 / 2, 1);
         }
         return getVertex(x2 / 2, y2 / 2, (z2 - 1) / 2, 2);
-    };
+    }
     let perimeterScratch = new Uint32Array(16);
     let perimeterU = new Int32Array(16);
     let perimeterV = new Int32Array(16);
     let perimeterLen = 0;
-    const localFaceUv = (axis, x2, y2, z2) => {
+    function localFaceUv(axis, x2, y2, z2) {
         if (axis === 0) {
             return [y2, z2];
         }
@@ -632,8 +634,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             return [x2, z2];
         }
         return [x2, y2];
-    };
-    const addPerimeterVertex = (vertex, u, v) => {
+    }
+    function addPerimeterVertex(vertex, u, v) {
         if (perimeterLen > 0 && perimeterScratch[perimeterLen - 1] === vertex) {
             return;
         }
@@ -652,19 +654,19 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
         perimeterU[perimeterLen] = u;
         perimeterV[perimeterLen] = v;
         perimeterLen++;
-    };
-    const addPerimeterPoint = (axis, x2, y2, z2) => {
+    }
+    function addPerimeterPoint(axis, x2, y2, z2) {
         const [u, v] = localFaceUv(axis, x2, y2, z2);
         addPerimeterVertex(getScaledVertex(x2, y2, z2), u, v);
-    };
-    const addDiagPerimeterPoint = (bucket, x2, y2, z2) => {
+    }
+    function addDiagPerimeterPoint(bucket, x2, y2, z2) {
         const { axisA, axisB, axisE, signA, signB } = decodeDiagBucket(bucket);
         const a = coordByAxis(x2, y2, z2, axisA);
         const b = coordByAxis(x2, y2, z2, axisB);
         const e = coordByAxis(x2, y2, z2, axisE);
         addPerimeterVertex(getScaledVertex(x2, y2, z2), signA * a - signB * b, e);
-    };
-    const addSplitSegment = (x0, y0, z0, x1, y1, z1) => {
+    }
+    function addSplitSegment(x0, y0, z0, x1, y1, z1) {
         const changes = (x0 !== x1 ? 1 : 0) + (y0 !== y1 ? 1 : 0) + (z0 !== z1 ? 1 : 0);
         if (changes !== 1) {
             return;
@@ -684,10 +686,12 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             addSplitLinePoint(key, z0);
             addSplitLinePoint(key, z1);
         }
-    };
-    const addSplitEdgeVertices = (axis, x0, y0, z0, x1, y1, z1, addPoint = (px, py, pz) => {
-        addPerimeterPoint(axis, px, py, pz);
-    }) => {
+    }
+    function addSplitEdgeVertices(axis, x0, y0, z0, x1, y1, z1, addPoint) {
+        function addDefaultPerimeterPoint(px, py, pz) {
+            addPerimeterPoint(axis, px, py, pz);
+        }
+        const emit = addPoint ?? addDefaultPerimeterPoint;
         let varAxis;
         let start;
         let end;
@@ -713,17 +717,17 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
         const lo = Math.min(start, end);
         const hi = Math.max(start, end);
         const forward = start <= end;
-        const emitPoint = (t) => {
+        function emitPoint(t) {
             if (varAxis === 0) {
-                addPoint(t, y0, z0);
+                emit(t, y0, z0);
             }
             else if (varAxis === 1) {
-                addPoint(x0, t, z0);
+                emit(x0, t, z0);
             }
             else {
-                addPoint(x0, y0, t);
+                emit(x0, y0, t);
             }
-        };
+        }
         if (forward) {
             for (let i = 0; i < points.length; i++) {
                 const t = points[i];
@@ -748,16 +752,16 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
                 emitPoint(t);
             }
         }
-    };
-    const appendOrientedTri = (a, b, c, useLocalCcw) => {
+    }
+    function appendOrientedTri(a, b, c, useLocalCcw) {
         if (useLocalCcw) {
             appendTri(a, b, c);
         }
         else {
             appendTri(a, c, b);
         }
-    };
-    const appendPerimeterTri = (a, b, c, useLocalCcw) => {
+    }
+    function appendPerimeterTri(a, b, c, useLocalCcw) {
         const abx = perimeterU[b] - perimeterU[a];
         const aby = perimeterV[b] - perimeterV[a];
         const acx = perimeterU[c] - perimeterU[a];
@@ -766,8 +770,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             return;
         }
         appendOrientedTri(perimeterScratch[a], perimeterScratch[b], perimeterScratch[c], useLocalCcw);
-    };
-    const triangulateTwoSideChain = (chainAStart, chainAEnd, chainBStart, chainBEnd, useLocalCcw) => {
+    }
+    function triangulateTwoSideChain(chainAStart, chainAEnd, chainBStart, chainBEnd, useLocalCcw) {
         const chainALen = chainAEnd - chainAStart;
         const chainBLen = chainBEnd - chainBStart;
         if (chainALen < 2 || chainBLen < 2) {
@@ -781,8 +785,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
         for (let i = chainBStart; i < chainBEnd - 1; i++) {
             appendPerimeterTri(pivot, i, i + 1, useLocalCcw);
         }
-    };
-    const emitFaceRectangle = (bucket, p, u0, v0, u1, v1) => {
+    }
+    function emitFaceRectangle(bucket, p, u0, v0, u1, v1) {
         const axis = bucket >> 1;
         const positive = (bucket & 1) === 1;
         const a = scaledFacePoint(axis, p, u0, v0);
@@ -806,15 +810,15 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
         const useLocalCcw = positive === localCcwIsPositive;
         triangulateTwoSideChain(side0Start, side0End, side1Start, side1End, useLocalCcw);
         triangulateTwoSideChain(side2Start, side2End, side3Start, side3End, useLocalCcw);
-    };
-    const emitDiagRectangle = (bucket, plane, u0, e0, u1, e1) => {
+    }
+    function emitDiagRectangle(bucket, plane, u0, e0, u1, e1) {
         const a = diagPoint(bucket, plane, u0, e0);
         const b = diagPoint(bucket, plane, u1, e0);
         const c = diagPoint(bucket, plane, u1, e1);
         const d = diagPoint(bucket, plane, u0, e1);
-        const addPoint = (x2, y2, z2) => {
+        function addPoint(x2, y2, z2) {
             addDiagPerimeterPoint(bucket, x2, y2, z2);
-        };
+        }
         perimeterLen = 0;
         const side0Start = 0;
         addPoint(a[0], a[1], a[2]);
@@ -845,8 +849,8 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
         const useLocalCcw = nx * normal[0] + ny * normal[1] + nz * normal[2] > 0;
         triangulateTwoSideChain(side0Start, side0End, side1Start, side1End, useLocalCcw);
         triangulateTwoSideChain(side2Start, side2End, side3Start, side3End, useLocalCcw);
-    };
-    const flushFaceCells = () => {
+    }
+    function flushFaceCells() {
         if (faceCellLen === 0 && diagCellLen === 0) {
             return;
         }
@@ -869,14 +873,14 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
         let diagRectE0 = new Int32Array(diagRectCap);
         let diagRectU1 = new Int32Array(diagRectCap);
         let diagRectE1 = new Int32Array(diagRectCap);
-        const addRect = (bucket, p, u0, v0, u1, v1) => {
+        function addRect(bucket, p, u0, v0, u1, v1) {
             if (rectLen === rectCap) {
                 rectCap *= 2;
-                const grow = (src) => {
+                function grow(src) {
                     const out = new Int32Array(rectCap);
                     out.set(src);
                     return out;
-                };
+                }
                 rectBucket = grow(rectBucket);
                 rectP = grow(rectP);
                 rectU0 = grow(rectU0);
@@ -891,15 +895,15 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             rectU1[rectLen] = u1;
             rectV1[rectLen] = v1;
             rectLen++;
-        };
-        const addDiagRect = (bucket, plane, u0, e0, u1, e1) => {
+        }
+        function addDiagRect(bucket, plane, u0, e0, u1, e1) {
             if (diagRectLen === diagRectCap) {
                 diagRectCap *= 2;
-                const grow = (src) => {
+                function grow(src) {
                     const out = new Int32Array(diagRectCap);
                     out.set(src);
                     return out;
-                };
+                }
                 diagRectBucket = grow(diagRectBucket);
                 diagRectPlane = grow(diagRectPlane);
                 diagRectU0 = grow(diagRectU0);
@@ -914,20 +918,20 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             diagRectU1[diagRectLen] = u1;
             diagRectE1[diagRectLen] = e1;
             diagRectLen++;
-        };
-        const decodeGroup = (key) => {
+        }
+        function decodeGroup(key) {
             let q = Math.floor(key / faceCoordStride);
             q = Math.floor(q / faceCoordStride);
             const pOff = q % faceCoordStride;
             const bucket = Math.floor(q / faceCoordStride);
             return { bucket, pOff };
-        };
-        const decodeUvKey = (key) => {
+        }
+        function decodeUvKey(key) {
             const vOff = key % faceCoordStride;
             const q = Math.floor(key / faceCoordStride);
             const uOff = q % faceCoordStride;
             return uOff * faceCoordStride + vOff;
-        };
+        }
         let start = 0;
         while (start < keys.length) {
             const { bucket, pOff } = decodeGroup(keys[start]);
@@ -947,10 +951,10 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             const hMask = hCap - 1;
             const hKeys = new Float64Array(hCap).fill(-1);
             const hVals = new Int32Array(hCap);
-            const hash = (key) => {
+            function hash(key) {
                 const hi = (key / 0x100000000) | 0;
                 return (Math.imul((key | 0) ^ hi, 0x9e3779b9) >>> 0) & hMask;
-            };
+            }
             for (let i = 0; i < count; i++) {
                 const uvKey = decodeUvKey(keys[start + i]);
                 let h = hash(uvKey);
@@ -960,7 +964,7 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
                 hKeys[h] = uvKey;
                 hVals[h] = i;
             }
-            const lookup = (uvKey) => {
+            function lookup(uvKey) {
                 let h = hash(uvKey);
                 while (true) {
                     const k = hKeys[h];
@@ -972,9 +976,11 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
                     }
                     h = (h + 1) & hMask;
                 }
-            };
+            }
             const visited = new Uint8Array(count);
-            const uvKeyOf = (uOff, vOff) => uOff * faceCoordStride + vOff;
+            function uvKeyOf(uOff, vOff) {
+                return uOff * faceCoordStride + vOff;
+            }
             const p = pOff - 1;
             for (let i = 0; i < count; i++) {
                 if (visited[i]) {
@@ -1020,7 +1026,7 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             const diagKeys = diagCellKeys.slice(0, diagCellLen);
             diagCellKeys = new Float64Array(0);
             diagKeys.sort();
-            const decodeDiagKey = (key) => {
+            function decodeDiagKey(key) {
                 const eOff = key % diagCoordStride;
                 let q = Math.floor(key / diagCoordStride);
                 const uOff = q % diagCoordStride;
@@ -1033,7 +1039,7 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
                     u: uOff - diagCoordOffset,
                     e: eOff - diagCoordOffset,
                 };
-            };
+            }
             let diagStart = 0;
             while (diagStart < diagKeys.length) {
                 const first = decodeDiagKey(diagKeys[diagStart]);
@@ -1115,7 +1121,7 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
             emitDiagRectangle(diagRectBucket[r], diagRectPlane[r], diagRectU0[r], diagRectE0[r], diagRectU1[r], diagRectE1[r]);
         }
         splitLinePoints?.clear();
-    };
+    }
     // Track processed orphan cells to avoid duplicate triangles. When a cell's
     // owner block doesn't exist, multiple neighboring blocks can reach it via
     // the -1 boundary extension. The hash table ensures each orphan cell is
@@ -1274,11 +1280,11 @@ function marchingCubes(grid, gridBounds, voxelResolution, options = {}) {
                         if (collectFlatFace(cubeIndex, vx, vy, vz)) {
                             continue;
                         }
-                        const edges = EDGE_TABLE[cubeIndex]; // oxlint-disable-line no-use-before-define
+                        const edges = EDGE_TABLE[cubeIndex]; // eslint-disable-line no-use-before-define
                         if (edges === 0) {
                             continue;
                         }
-                        const triRow = TRI_TABLE[cubeIndex]; // oxlint-disable-line no-use-before-define
+                        const triRow = TRI_TABLE[cubeIndex]; // eslint-disable-line no-use-before-define
                         const triLen = triRow.length;
                         const usedMask = collectDiagFaces(triRow, vx, vy, vz);
                         let neededEdges = 0;

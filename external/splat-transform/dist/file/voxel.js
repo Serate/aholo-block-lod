@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Buffer } from 'node:buffer';
+import { gzipSync } from 'node:zlib';
 /**
  * Portions of this voxel pipeline are adapted from:
  * https://github.com/playcanvas/splat-transform
@@ -9,10 +10,40 @@ import { Buffer } from 'node:buffer';
  */
 import { ColIdx } from '../SplatData.js';
 import { logger, cpuVoxelize, gpuVoxelize } from '../utils/index.js';
+import { encodeCompactVoxelBinary, encodeRawVoxelBinary } from '../utils/voxel/binary.js';
 import { fillExterior, fillFloor, carve } from '../utils/voxel/nav.js';
 import { buildCollisionMesh } from '../utils/voxel/mesh.js';
 import { cropToNavigable, cropToOccupied, filterAndFillBlocks } from '../utils/voxel/postprocess.js';
-import { alignGridBounds, ALPHA_THRESHOLD, BlockMaskBuffer, buildSparseOctree, decodeMorton3, encodeMorton3, extentsFromQuatScale, getChildOffset, SparseVoxelGrid, } from '../utils/voxel/common.js';
+import { filterCluster, } from '../utils/voxel/filter-cluster.js';
+import { alignGridBounds, ALPHA_THRESHOLD, buildSparseOctree, checkVoxelGridCapacity, decodeMorton3, encodeMorton3, extentsFromQuatScale, getChildOffset, MAX_24BIT_OFFSET, MAX_VOXEL_BLOCK_COUNT_INT32, SparseOctree24BitOverflowError, SparseVoxelGrid, } from '../utils/voxel/common.js';
+// Stay under the hard 31-bit block limit and leave room for CPU memory use.
+const GRID_BLOCK_FALLBACK_TARGET = Math.floor(MAX_VOXEL_BLOCK_COUNT_INT32 * 0.55);
+const OCTREE_24BIT_FALLBACK_TARGET = Math.floor((MAX_24BIT_OFFSET + 1) * 0.98);
+const MAX_RESOLUTION_FALLBACK_ATTEMPTS = 4;
+const RESOLUTION_FALLBACK_ALIGNMENT = 0.01;
+function blockCountFromBounds(bounds, voxelResolution) {
+    const blockSize = 4 * voxelResolution;
+    const count = {
+        x: Math.round((bounds.max.x - bounds.min.x) / blockSize),
+        y: Math.round((bounds.max.y - bounds.min.y) / blockSize),
+        z: Math.round((bounds.max.z - bounds.min.z) / blockSize),
+    };
+    return { ...count, total: count.x * count.y * count.z };
+}
+function chooseFallbackResolution(currentVoxelResolution, currentCount, targetCount) {
+    // Raise resolution based on how far the count is over target.
+    // Round up to 0.01 so metadata stays easy to read.
+    const step = RESOLUTION_FALLBACK_ALIGNMENT;
+    function align(value) {
+        return Number((Math.ceil((value - 1e-12) / step) * step).toFixed(6));
+    }
+    const scaled = currentVoxelResolution * Math.cbrt(currentCount / targetCount);
+    const aligned = align(scaled);
+    if (aligned > currentVoxelResolution) {
+        return aligned;
+    }
+    return align(currentVoxelResolution + step);
+}
 /**
  * Build a sparse voxel octree from gaussian splat data.
  *
@@ -35,7 +66,7 @@ import { alignGridBounds, ALPHA_THRESHOLD, BlockMaskBuffer, buildSparseOctree, d
  * @param navCapsule - Capsule config used by `carve`.
  * @param navSeed - Seed position used by exterior/carve flood fills.
  */
-const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, backend = 'gpu', collisionMesh = false, navExteriorRadius, floorFill = false, floorFillDilation = 0, cpuWorkerCount = -1, box = { minCorner: [-100, -100, -100], maxCorner: [100, 100, 100] }, navCapsule, navSeed) => {
+async function writeVoxels(data, voxelResolution = 0.05, opacityCutoff = 0.1, backend = 'gpu', collisionMesh = false, navExteriorRadius, floorFill = false, floorFillDilation = 0, cpuWorkerCount = -1, box = { minCorner: [-100, -100, -100], maxCorner: [100, 100, 100] }, navCapsule, navSeed, nodeEncoding = 'raw', requestedVoxelResolution = voxelResolution) {
     const hasNav = !!(navCapsule && navSeed && navCapsule.height > 0);
     const hasFillExterior = !!(navExteriorRadius && navSeed);
     const hasFloorFill = floorFill;
@@ -89,34 +120,52 @@ const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, ba
     }
     logger.info(`scene extents: (${sceneBounds.min.x.toFixed(2)},${sceneBounds.min.y.toFixed(2)},${sceneBounds.min.z.toFixed(2)}) - (${sceneBounds.max.x.toFixed(2)},${sceneBounds.max.y.toFixed(2)},${sceneBounds.max.z.toFixed(2)})`);
     logger.timeEnd('Voxel bounding/extents');
-    const exteriorPad = hasFillExterior ? (Math.ceil(navExteriorRadius / voxelResolution) + 1) * voxelResolution : 0;
-    const floorPad = hasFloorFill ? (Math.ceil(floorFillDilation / voxelResolution) + 1) * voxelResolution : 0;
-    const padXZ = Math.max(exteriorPad, floorPad);
-    const padY = exteriorPad;
-    const rawVoxelBounds = {
-        min: {
-            x: sceneBounds.min.x - padXZ,
-            y: sceneBounds.min.y - padY,
-            z: sceneBounds.min.z - padXZ,
-        },
-        max: {
-            x: sceneBounds.max.x + padXZ,
-            y: sceneBounds.max.y + padY,
-            z: sceneBounds.max.z + padXZ,
-        },
-    };
-    const voxelBounds = {
-        min: {
-            x: Math.max(rawVoxelBounds.min.x, box.minCorner[0]),
-            y: Math.max(rawVoxelBounds.min.y, box.minCorner[1]),
-            z: Math.max(rawVoxelBounds.min.z, box.minCorner[2]),
-        },
-        max: {
-            x: Math.min(rawVoxelBounds.max.x, box.maxCorner[0]),
-            y: Math.min(rawVoxelBounds.max.y, box.maxCorner[1]),
-            z: Math.min(rawVoxelBounds.max.z, box.maxCorner[2]),
-        },
-    };
+    function resolveVoxelBounds(resolution) {
+        const exteriorPad = hasFillExterior ? (Math.ceil(navExteriorRadius / resolution) + 1) * resolution : 0;
+        const floorPad = hasFloorFill ? (Math.ceil(floorFillDilation / resolution) + 1) * resolution : 0;
+        const padXZ = Math.max(exteriorPad, floorPad);
+        const padY = exteriorPad;
+        const rawVoxelBounds = {
+            min: {
+                x: sceneBounds.min.x - padXZ,
+                y: sceneBounds.min.y - padY,
+                z: sceneBounds.min.z - padXZ,
+            },
+            max: {
+                x: sceneBounds.max.x + padXZ,
+                y: sceneBounds.max.y + padY,
+                z: sceneBounds.max.z + padXZ,
+            },
+        };
+        const voxelBounds = {
+            min: {
+                x: Math.max(rawVoxelBounds.min.x, box.minCorner[0]),
+                y: Math.max(rawVoxelBounds.min.y, box.minCorner[1]),
+                z: Math.max(rawVoxelBounds.min.z, box.minCorner[2]),
+            },
+            max: {
+                x: Math.min(rawVoxelBounds.max.x, box.maxCorner[0]),
+                y: Math.min(rawVoxelBounds.max.y, box.maxCorner[1]),
+                z: Math.min(rawVoxelBounds.max.z, box.maxCorner[2]),
+            },
+        };
+        return { rawVoxelBounds, voxelBounds, gridBounds: alignGridBounds(voxelBounds, resolution) };
+    }
+    let bounds = resolveVoxelBounds(voxelResolution);
+    let blockCount = blockCountFromBounds(bounds.gridBounds, voxelResolution);
+    for (let attempt = 0; blockCount.total > GRID_BLOCK_FALLBACK_TARGET; attempt++) {
+        if (attempt >= MAX_RESOLUTION_FALLBACK_ATTEMPTS) {
+            break;
+        }
+        const nextVoxelResolution = chooseFallbackResolution(voxelResolution, blockCount.total, GRID_BLOCK_FALLBACK_TARGET);
+        const detail = `grid blocks=${blockCount.x}x${blockCount.y}x${blockCount.z}, total=${blockCount.total}, target=${GRID_BLOCK_FALLBACK_TARGET}`;
+        logger.info(`voxel resolution fallback: ${detail}; ` + `resolution ${voxelResolution} -> ${nextVoxelResolution}`);
+        voxelResolution = nextVoxelResolution;
+        bounds = resolveVoxelBounds(voxelResolution);
+        blockCount = blockCountFromBounds(bounds.gridBounds, voxelResolution);
+    }
+    const { rawVoxelBounds, voxelBounds } = bounds;
+    const gridBounds = bounds.gridBounds;
     const boxCropApplied = voxelBounds.min.x > rawVoxelBounds.min.x ||
         voxelBounds.min.y > rawVoxelBounds.min.y ||
         voxelBounds.min.z > rawVoxelBounds.min.z ||
@@ -135,9 +184,11 @@ const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, ba
         voxelBounds.min.z >= voxelBounds.max.z) {
         throw new Error(`voxel box does not overlap scene bounds: box=${JSON.stringify(box)}`);
     }
-    // Align to 4x4x4 block grid.
-    const gridBounds = alignGridBounds(voxelBounds, voxelResolution);
-    let blocks = new BlockMaskBuffer();
+    if (voxelResolution !== requestedVoxelResolution) {
+        logger.info(`voxel effective resolution=${voxelResolution} (requested=${requestedVoxelResolution})`);
+    }
+    checkVoxelGridCapacity(gridBounds, voxelResolution);
+    let blocks;
     if (backend === 'gpu') {
         const gpuStart = Date.now();
         try {
@@ -147,7 +198,6 @@ const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, ba
         }
         catch (e) {
             const gpuElapsed = Date.now() - gpuStart;
-            logger.error('Voxel GPU backend failed, fallback to CPU.');
             logger.error(`Voxelizing (GPU) failed after ${(gpuElapsed / 1000).toFixed(3)}s`);
             if (e instanceof Error) {
                 logger.error(`GPU error message: ${e.message}`);
@@ -158,9 +208,10 @@ const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, ba
             else {
                 logger.error(`GPU error: ${String(e)}`);
             }
+            logger.error('Voxel GPU backend failed, fallback to CPU.');
         }
     }
-    if (backend === 'cpu' || blocks.count === 0) {
+    if (!blocks || blocks.count === 0) {
         logger.time('Voxelizing (CPU)');
         blocks = await cpuVoxelize(xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, qyCol, qzCol, qwCol, aCol, extents, gridBounds, voxelResolution, opacityCutoff, { workerCount: cpuWorkerCount });
         logger.timeEnd('Voxelizing (CPU)');
@@ -210,7 +261,7 @@ const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, ba
     grid = finalCrop.grid;
     navGridBounds = finalCrop.gridBounds;
     logger.timeEnd('Crop voxel bounds');
-    const collisionMeshShape = (() => {
+    function resolveCollisionMeshShape() {
         if (collisionMesh === false || collisionMesh === undefined) {
             return null;
         }
@@ -221,17 +272,28 @@ const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, ba
             return collisionMesh;
         }
         throw new Error(`Invalid collisionMesh value: ${String(collisionMesh)}. Expected true, false, "smooth", or "faces"`);
-    })();
+    }
+    const collisionMeshShape = resolveCollisionMeshShape();
     const collisionGlb = collisionMeshShape
         ? buildCollisionMesh(grid, navGridBounds, voxelResolution, collisionMeshShape)
         : undefined;
     // BuildSparseOctree emits Laine-Karras nodes + mixed leaf masks.
     logger.time('Build octree');
-    const octree = buildSparseOctree(grid, navGridBounds, sceneBounds, voxelResolution, { consumeGrid: true });
-    logger.timeEnd('Build octree');
+    let octree;
+    try {
+        octree = buildSparseOctree(grid, navGridBounds, sceneBounds, voxelResolution, { consumeGrid: true });
+        logger.timeEnd('Build octree');
+    }
+    catch (error) {
+        logger.timeEnd('Build octree');
+        if (error instanceof SparseOctree24BitOverflowError) {
+            error.voxelResolution = voxelResolution;
+        }
+        throw error;
+    }
     logger.info(`octree: depth=${octree.treeDepth}, interior=${octree.numInteriorNodes}, mixed=${octree.numMixedLeaves}`);
     const metadata = {
-        version: '1.1',
+        version: '1.2',
         gridBounds: {
             min: [octree.gridBounds.min.x, octree.gridBounds.min.y, octree.gridBounds.min.z],
             max: [octree.gridBounds.max.x, octree.gridBounds.max.y, octree.gridBounds.max.z],
@@ -248,34 +310,98 @@ const writeVoxels = async (data, voxelResolution = 0.05, opacityCutoff = 0.1, ba
         nodeCount: octree.nodes.length,
         leafDataCount: octree.leafData.length,
         files: ['voxel.bin'],
+        nodeEncoding,
     };
-    const binarySize = (octree.nodes.length + octree.leafData.length) * 4;
-    const binary = new Uint8Array(binarySize);
-    const view = new Uint32Array(binary.buffer);
-    view.set(octree.nodes, 0);
-    view.set(octree.leafData, octree.nodes.length);
+    const binary = nodeEncoding === 'compact'
+        ? encodeCompactVoxelBinary(octree.nodes, octree.leafData, octree.numInteriorNodes, octree.numMixedLeaves)
+        : encodeRawVoxelBinary(octree.nodes, octree.leafData);
     return { metadata, binary, collisionGlb };
-};
+}
 export async function writeVoxelFiles(outputDir, data, options) {
-    const { metadata, binary, collisionGlb } = await writeVoxels(data, options?.voxelResolution ?? 0.05, options?.opacityCutoff ?? 0.1, options?.backend ?? 'gpu', options?.collisionMesh ?? false, options?.navExteriorRadius, options?.floorFill ?? false, options?.floorFillDilation ?? 0, options?.cpuWorkerCount ?? -1, options?.box ?? { minCorner: [-100, -100, -100], maxCorner: [100, 100, 100] }, options?.navCapsule, options?.navSeed);
+    const gzip = options?.gzip ?? false;
+    const requestedVoxelResolution = options?.voxelResolution ?? 0.05;
+    const opacityCutoff = options?.opacityCutoff ?? 0.1;
+    const backend = options?.backend ?? 'gpu';
+    const collisionMesh = options?.collisionMesh ?? false;
+    const floorFill = options?.floorFill ?? false;
+    const floorFillDilation = options?.floorFillDilation ?? 0;
+    const cpuWorkerCount = options?.cpuWorkerCount ?? -1;
+    const box = options?.box ?? { minCorner: [-100, -100, -100], maxCorner: [100, 100, 100] };
+    const nodeEncoding = options?.nodeEncoding ?? 'raw';
+    const filterClusterOptions = options?.filterCluster ?? true;
+    let sourceData = data;
+    if (filterClusterOptions) {
+        const filterOptions = filterClusterOptions === true ? {} : filterClusterOptions;
+        const filterRuntime = {
+            backend,
+            box,
+        };
+        if (options?.cpuWorkerCount !== undefined) {
+            filterRuntime.cpuWorkerCount = cpuWorkerCount;
+        }
+        logger.info('voxel filterCluster enabled');
+        sourceData = await filterCluster(data, filterOptions, filterRuntime);
+    }
+    let attemptVoxelResolution = requestedVoxelResolution;
+    let result;
+    for (let attempt = 0; attempt <= MAX_RESOLUTION_FALLBACK_ATTEMPTS; attempt++) {
+        try {
+            result = await writeVoxels(sourceData, attemptVoxelResolution, opacityCutoff, backend, collisionMesh, options?.navExteriorRadius, floorFill, floorFillDilation, cpuWorkerCount, box, options?.navCapsule, options?.navSeed, nodeEncoding, requestedVoxelResolution);
+            break;
+        }
+        catch (error) {
+            if (!(error instanceof SparseOctree24BitOverflowError) || attempt >= MAX_RESOLUTION_FALLBACK_ATTEMPTS) {
+                throw error;
+            }
+            const failedResolution = error.voxelResolution ?? attemptVoxelResolution;
+            const target = Math.min(OCTREE_24BIT_FALLBACK_TARGET, Math.floor(error.limit * 0.98));
+            const nextVoxelResolution = chooseFallbackResolution(failedResolution, error.actual, target);
+            const detail = `octree 24-bit ${error.kind} count=${error.actual}, target=${target}, limit=${error.limit}`;
+            logger.info(`voxel resolution fallback: ${detail}; ` + `resolution ${failedResolution} -> ${nextVoxelResolution}`);
+            attemptVoxelResolution = nextVoxelResolution;
+        }
+    }
+    if (!result) {
+        throw new Error('voxel resolution fallback exhausted without producing output');
+    }
+    const { metadata, binary, collisionGlb } = result;
     fs.mkdirSync(outputDir, { recursive: true });
     const metaPath = path.join(outputDir, 'voxel-meta.json');
-    const binPath = path.join(outputDir, 'voxel.bin');
+    const rawBytes = binary.length;
+    let binPayload;
+    let binPath;
+    if (gzip) {
+        binPayload = gzipSync(binary);
+        binPath = path.join(outputDir, 'voxel.bin.gz');
+        metadata.files = ['voxel.bin.gz'];
+    }
+    else {
+        binPayload = binary;
+        binPath = path.join(outputDir, 'voxel.bin');
+    }
     logger.info(`writing '${metaPath}'...`);
     fs.writeFileSync(metaPath, Buffer.from(JSON.stringify(metadata, null, 2), 'utf-8'));
     logger.info(`writing '${binPath}'...`);
-    fs.writeFileSync(binPath, binary);
+    fs.writeFileSync(binPath, binPayload);
     if (collisionGlb && collisionGlb.length > 0) {
         const glbPath = path.join(outputDir, 'collision.glb');
         logger.info(`writing '${glbPath}'...`);
         fs.writeFileSync(glbPath, collisionGlb);
     }
-    const totalBytes = binary.length;
+    function formatSize(bytes) {
+        if (bytes >= 1024 * 1024) {
+            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
+        return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    const octreeSizeMsg = gzip
+        ? `octree raw: ${formatSize(rawBytes)}, gzip: ${formatSize(binPayload.length)} (${rawBytes > 0 ? ((binPayload.length / rawBytes) * 100).toFixed(1) : 'n/a'}%)`
+        : `octree ${formatSize(rawBytes)}`;
     if (collisionGlb && collisionGlb.length > 0) {
-        logger.info(`total size: octree ${(totalBytes / 1024).toFixed(1)} KB, collision mesh ${(collisionGlb.length / 1024).toFixed(1)} KB`);
+        logger.info(`${octreeSizeMsg}, collision mesh ${formatSize(collisionGlb.length)}`);
     }
     else {
-        logger.info(`total size: ${(totalBytes / 1024).toFixed(1)} KB`);
+        logger.info(octreeSizeMsg);
     }
 }
 export const voxelUtils = {

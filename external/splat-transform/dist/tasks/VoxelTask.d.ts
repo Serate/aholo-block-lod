@@ -1,3 +1,5 @@
+import type { FilterClusterOptions } from '../utils/voxel/filter-cluster.js';
+import type { VoxelNodeEncoding } from '../utils/voxel/binary.js';
 import { type Context, BaseTask } from './BaseTask.js';
 export interface VoxelTaskConfig {
     input: string;
@@ -23,6 +25,9 @@ export interface VoxelTaskConfig {
         y: number;
         z: number;
     };
+    gzip?: boolean;
+    nodeEncoding?: VoxelNodeEncoding;
+    filterCluster?: boolean | FilterClusterOptions;
 }
 export declare class VoxelTask extends BaseTask<VoxelTaskConfig> {
     exec(config: VoxelTaskConfig, { logger, resources }: Context): Promise<void>;

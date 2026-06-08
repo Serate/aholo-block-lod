@@ -7,13 +7,13 @@ const FACE_Y3 = 0xf000f000;
 const FACE_Z0_LO = 0x0000ffff;
 const FACE_Z3_HI = 0xffff0000 >>> 0;
 /** Count set bits in a 32-bit unsigned integer. */
-const popcount = (n) => {
+function popcount(n) {
     n >>>= 0;
     n -= (n >>> 1) & 0x55555555;
     n = (n & 0x33333333) + ((n >>> 2) & 0x33333333);
     return (((n + (n >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
-};
-const sortedUint32Has = (sorted, value) => {
+}
+function sortedUint32Has(sorted, value) {
     let lo = 0;
     let hi = sorted.length - 1;
     while (lo <= hi) {
@@ -30,8 +30,8 @@ const sortedUint32Has = (sorted, value) => {
         }
     }
     return false;
-};
-const findMixedBlockIndex = (sortedBlockIdx, target) => {
+}
+function findMixedBlockIndex(sortedBlockIdx, target) {
     let lo = 0;
     let hi = sortedBlockIdx.length - 1;
     while (lo <= hi) {
@@ -48,15 +48,15 @@ const findMixedBlockIndex = (sortedBlockIdx, target) => {
         }
     }
     return undefined;
-};
-const sortMixedByBlockIdx = (blockIdx, masks) => {
+}
+function sortMixedByBlockIdx(blockIdx, masks) {
     const n = blockIdx.length;
     if (n <= 1) {
         return;
     }
     const stackLo = [0];
     const stackHi = [n - 1];
-    const swap = (a, b) => {
+    function swap(a, b) {
         const k = blockIdx[a];
         blockIdx[a] = blockIdx[b];
         blockIdx[b] = k;
@@ -66,7 +66,7 @@ const sortMixedByBlockIdx = (blockIdx, masks) => {
         masks[a * 2 + 1] = masks[b * 2 + 1];
         masks[b * 2] = alo;
         masks[b * 2 + 1] = ahi;
-    };
+    }
     while (stackLo.length > 0) {
         const lo = stackLo.pop();
         const hi = stackHi.pop();
@@ -137,8 +137,8 @@ const sortMixedByBlockIdx = (blockIdx, masks) => {
             }
         }
     }
-};
-const addCrossFace = (nx, ny, nz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, ourFaceMask, adjFaceMask, shiftAmount, shiftLeft, curLo, curHi, write) => {
+}
+function addCrossFace(nx, ny, nz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, ourFaceMask, adjFaceMask, shiftAmount, shiftLeft, curLo, curHi, write) {
     if (nx < 0 || ny < 0 || nz < 0 || nx >= nbx || ny >= nby || nz >= nbz) {
         write(curLo, curHi);
         return;
@@ -163,8 +163,8 @@ const addCrossFace = (nx, ny, nz, nbx, nby, nbz, hasSolid, getMixedIndex, masks,
     else {
         write(curLo | (faceLo >>> shiftAmount), curHi | (faceHi >>> shiftAmount));
     }
-};
-const addCrossFaceZ = (nx, ny, nz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, plusZ, curLo, curHi, write) => {
+}
+function addCrossFaceZ(nx, ny, nz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, plusZ, curLo, curHi, write) {
     if (nx < 0 || ny < 0 || nz < 0 || nx >= nbx || ny >= nby || nz >= nbz) {
         write(curLo, curHi);
         return;
@@ -192,14 +192,14 @@ const addCrossFaceZ = (nx, ny, nz, nbx, nby, nbz, hasSolid, getMixedIndex, masks
     else {
         write(curLo | ((adjHi & FACE_Z3_HI) >>> 16), curHi);
     }
-};
+}
 /**
  * Block cleanup pass:
  * - remove voxels that have no supporting 6-neighborhood occupancy
  * - fill single-voxel holes fully enclosed by 6 neighbors
  * Includes cross-block neighbor propagation for face-adjacent blocks.
  */
-export const filterAndFillBlocks = (blocks, nbx = Infinity, nby = Infinity, nbz = Infinity) => {
+export function filterAndFillBlocks(blocks, nbx = Infinity, nby = Infinity, nbz = Infinity) {
     const mixed = blocks.getMixedBlocks();
     const solids = blocks.getSolidBlocks();
     const mixedCount = mixed.blockIdx.length;
@@ -217,8 +217,12 @@ export const filterAndFillBlocks = (blocks, nbx = Infinity, nby = Infinity, nbz 
         sortedSolid[i] = solids[i];
     }
     sortedSolid.sort();
-    const hasSolid = (blockIdx) => sortedUint32Has(sortedSolid, blockIdx);
-    const getMixedIndex = (blockIdx) => findMixedBlockIndex(mixedBlockIdx, blockIdx);
+    function hasSolid(blockIdx) {
+        return sortedUint32Has(sortedSolid, blockIdx);
+    }
+    function getMixedIndex(blockIdx) {
+        return findMixedBlockIndex(mixedBlockIdx, blockIdx);
+    }
     const newMasks = new Uint32Array(masks.length);
     let voxelsRemoved = 0;
     let voxelsFilled = 0;
@@ -242,30 +246,36 @@ export const filterAndFillBlocks = (blocks, nbx = Infinity, nby = Infinity, nbz 
         let pzHi = origHi >>> 16;
         let mzLo = origLo << 16;
         let mzHi = (origHi << 16) | (origLo >>> 16);
-        addCrossFace(bx + 1, by, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_X3, FACE_X0, 3, true, pxLo, pxHi, (lo, hi) => {
+        function writePx(lo, hi) {
             pxLo = lo;
             pxHi = hi;
-        });
-        addCrossFace(bx - 1, by, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_X0, FACE_X3, 3, false, mxLo, mxHi, (lo, hi) => {
+        }
+        function writeMx(lo, hi) {
             mxLo = lo;
             mxHi = hi;
-        });
-        addCrossFace(bx, by + 1, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_Y3, FACE_Y0, 12, true, pyLo, pyHi, (lo, hi) => {
+        }
+        function writePy(lo, hi) {
             pyLo = lo;
             pyHi = hi;
-        });
-        addCrossFace(bx, by - 1, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_Y0, FACE_Y3, 12, false, myLo, myHi, (lo, hi) => {
+        }
+        function writeMy(lo, hi) {
             myLo = lo;
             myHi = hi;
-        });
-        addCrossFaceZ(bx, by, bz + 1, nbx, nby, nbz, hasSolid, getMixedIndex, masks, true, pzLo, pzHi, (lo, hi) => {
+        }
+        function writePz(lo, hi) {
             pzLo = lo;
             pzHi = hi;
-        });
-        addCrossFaceZ(bx, by, bz - 1, nbx, nby, nbz, hasSolid, getMixedIndex, masks, false, mzLo, mzHi, (lo, hi) => {
+        }
+        function writeMz(lo, hi) {
             mzLo = lo;
             mzHi = hi;
-        });
+        }
+        addCrossFace(bx + 1, by, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_X3, FACE_X0, 3, true, pxLo, pxHi, writePx);
+        addCrossFace(bx - 1, by, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_X0, FACE_X3, 3, false, mxLo, mxHi, writeMx);
+        addCrossFace(bx, by + 1, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_Y3, FACE_Y0, 12, true, pyLo, pyHi, writePy);
+        addCrossFace(bx, by - 1, bz, nbx, nby, nbz, hasSolid, getMixedIndex, masks, FACE_Y0, FACE_Y3, 12, false, myLo, myHi, writeMy);
+        addCrossFaceZ(bx, by, bz + 1, nbx, nby, nbz, hasSolid, getMixedIndex, masks, true, pzLo, pzHi, writePz);
+        addCrossFaceZ(bx, by, bz - 1, nbx, nby, nbz, hasSolid, getMixedIndex, masks, false, mzLo, mzHi, writeMz);
         const neighborLo = pxLo | mxLo | pyLo | myLo | pzLo | mzLo;
         const neighborHi = pxHi | mxHi | pyHi | myHi | pzHi | mzHi;
         let lo = origLo & neighborLo;
@@ -290,9 +300,9 @@ export const filterAndFillBlocks = (blocks, nbx = Infinity, nby = Infinity, nbz 
     }
     logger.info(`voxel filter: ${voxelsRemoved} voxels removed, ${voxelsFilled} voxels filled`);
     return result;
-};
+}
 /** Crop blocks into [min, max) block range and rebase linear block coordinates. */
-export const cropBlocksToRange = (blocks, sourceNbx, sourceNby, cropMinBx, cropMinBy, cropMinBz, cropMaxBx, cropMaxBy, cropMaxBz) => {
+export function cropBlocksToRange(blocks, sourceNbx, sourceNby, cropMinBx, cropMinBy, cropMinBz, cropMaxBx, cropMaxBy, cropMaxBz) {
     const cropped = new BlockMaskBuffer();
     const outNbx = cropMaxBx - cropMinBx;
     const outNby = cropMaxBy - cropMinBy;
@@ -328,9 +338,9 @@ export const cropBlocksToRange = (blocks, sourceNbx, sourceNby, cropMinBx, cropM
         cropped.addBlock(bx - cropMinBx + (by - cropMinBy) * outNbx + (bz - cropMinBz) * outNbx * outNby, mixed.masks[i * 2], mixed.masks[i * 2 + 1]);
     }
     return cropped;
-};
+}
 /** Compute world-space bounds corresponding to a cropped block range. */
-export const cropBounds = (gridBounds, voxelResolution, cropMinBx, cropMinBy, cropMinBz, cropMaxBx, cropMaxBy, cropMaxBz) => {
+export function cropBounds(gridBounds, voxelResolution, cropMinBx, cropMinBy, cropMinBz, cropMaxBx, cropMaxBy, cropMaxBz) {
     const blockSize = 4 * voxelResolution;
     const croppedMin = {
         x: gridBounds.min.x + cropMinBx * blockSize,
@@ -345,9 +355,9 @@ export const cropBounds = (gridBounds, voxelResolution, cropMinBx, cropMinBy, cr
             z: croppedMin.z + (cropMaxBz - cropMinBz) * blockSize,
         },
     };
-};
+}
 /** Tight crop to occupied block bounds. */
-export const cropToOccupied = (grid, gridBounds, voxelResolution) => {
+export function cropToOccupied(grid, gridBounds, voxelResolution) {
     const occupied = grid.getOccupiedBlockBounds();
     if (!occupied) {
         return { grid, gridBounds };
@@ -364,9 +374,9 @@ export const cropToOccupied = (grid, gridBounds, voxelResolution) => {
         grid: grid.cropTo(minBx, minBy, minBz, cropMaxBx, cropMaxBy, cropMaxBz),
         gridBounds: cropBounds(gridBounds, voxelResolution, minBx, minBy, minBz, cropMaxBx, cropMaxBy, cropMaxBz),
     };
-};
+}
 /** Tight crop to navigable (non-fully-solid) block bounds. */
-export const cropToNavigable = (grid, gridBounds, voxelResolution) => {
+export function cropToNavigable(grid, gridBounds, voxelResolution) {
     const navBounds = grid.getNavigableBlockBounds();
     if (!navBounds) {
         return { grid, gridBounds };
@@ -395,4 +405,4 @@ export const cropToNavigable = (grid, gridBounds, voxelResolution) => {
         grid: grid.cropTo(cropMinBx, cropMinBy, cropMinBz, cropMaxBx, cropMaxBy, cropMaxBz),
         gridBounds: cropBounds(gridBounds, voxelResolution, cropMinBx, cropMinBy, cropMinBz, cropMaxBx, cropMaxBy, cropMaxBz),
     };
-};
+}

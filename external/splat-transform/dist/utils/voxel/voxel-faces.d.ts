@@ -14,5 +14,5 @@ import { type SparseVoxelGrid } from './common.js';
  * @param voxelResolution - Size of each voxel in world units.
  * @returns Mesh with positions and indices.
  */
-declare const voxelFaces: (grid: SparseVoxelGrid, gridBounds: Bounds, voxelResolution: number) => Mesh;
+declare function voxelFaces(grid: SparseVoxelGrid, gridBounds: Bounds, voxelResolution: number): Mesh;
 export { voxelFaces };

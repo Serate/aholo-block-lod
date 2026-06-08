@@ -1,6 +1,6 @@
 /** 3D Morton (Z-order) for integer block coordinates. */
-export declare const encodeMorton3: (x: number, y: number, z: number) => number;
-export declare const decodeMorton3: (m: number) => [number, number, number];
+export declare function encodeMorton3(x: number, y: number, z: number): number;
+export declare function decodeMorton3(m: number): [number, number, number];
 export interface Bounds {
     min: {
         x: number;
@@ -16,9 +16,16 @@ export interface Bounds {
 /** Voxel leaf edge length in voxels (4³ block). */
 export declare const LEAF_SIZE = 4;
 export declare const ALPHA_THRESHOLD: number;
-export declare const alignGridBounds: (bounds: Bounds, voxelResolution: number) => Bounds;
+export declare function alignGridBounds(bounds: Bounds, voxelResolution: number): Bounds;
+/**
+ * Max linear block index (signed 32-bit): BlockMaskMap keys, worker `blockIdx >>> 0`,
+ * and types bitmap indexing. Implies types bitmap <= ceil(MAX / 16) * 4 ~= 512 MB.
+ */
+export declare const MAX_VOXEL_BLOCK_COUNT_INT32 = 2147483647;
+/** Preflight hard grid limits before voxelization allocates the types bitmap. */
+export declare function checkVoxelGridCapacity(gridBounds: Bounds, voxelResolution: number): void;
 /** Opacity-aware AABB half-extents from scale + unit quaternion. */
-export declare const extentsFromQuatScale: (sx: number, sy: number, sz: number, qx: number, qy: number, qz: number, qw: number, opacity?: number, opacityThreshold?: number) => {
+export declare function extentsFromQuatScale(sx: number, sy: number, sz: number, qx: number, qy: number, qz: number, qw: number, opacity?: number, opacityThreshold?: number): {
     ex: number;
     ey: number;
     ez: number;
@@ -73,8 +80,8 @@ declare const BLOCK_MIXED = 2;
 declare const TYPE_MASK = 3;
 declare const BLOCKS_PER_WORD = 16;
 declare const EVEN_BITS: number;
-declare const readBlockType: (types: Uint32Array, blockIdx: number) => number;
-declare const writeBlockType: (types: Uint32Array, blockIdx: number, blockType: number) => void;
+declare function readBlockType(types: Uint32Array, blockIdx: number): number;
+declare function writeBlockType(types: Uint32Array, blockIdx: number, blockType: number): void;
 declare class BlockMaskMap {
     keys: Int32Array;
     lo: Uint32Array;
@@ -137,7 +144,26 @@ declare class SparseVoxelGrid {
     } | null;
 }
 export declare const SOLID_LEAF_MARKER: number;
-export declare const getChildOffset: (mask: number, octant: number) => number;
+export declare const MAX_24BIT_OFFSET = 16777215;
+export declare class SparseOctree24BitOverflowError extends Error {
+    kind: 'node' | 'mixed-leaf';
+    actual: number;
+    limit: number;
+    voxelResolution?: number;
+    constructor(kind: 'node' | 'mixed-leaf', actual: number, limit: number);
+}
+export interface SparseOctree {
+    gridBounds: Bounds;
+    sceneBounds: Bounds;
+    voxelResolution: number;
+    leafSize: number;
+    treeDepth: number;
+    numInteriorNodes: number;
+    numMixedLeaves: number;
+    nodes: Uint32Array;
+    leafData: Uint32Array;
+}
+export declare function getChildOffset(mask: number, octant: number): number;
 interface BuildSparseOctreeOptions {
     consumeGrid?: boolean;
     dense?: boolean;
@@ -148,15 +174,5 @@ interface BuildSparseOctreeOptions {
  * 2) bottom-up level construction by parent Morton grouping
  * 3) BFS flatten to node/leafData arrays.
  */
-export declare const buildSparseOctree: (grid: SparseVoxelGrid, gridBounds: Bounds, sceneBounds: Bounds, voxelResolution: number, options?: BuildSparseOctreeOptions) => {
-    gridBounds: Bounds;
-    sceneBounds: Bounds;
-    voxelResolution: number;
-    leafSize: number;
-    treeDepth: number;
-    numInteriorNodes: number;
-    numMixedLeaves: number;
-    nodes: Uint32Array<ArrayBuffer>;
-    leafData: Uint32Array<ArrayBuffer>;
-};
+export declare function buildSparseOctree(grid: SparseVoxelGrid, gridBounds: Bounds, sceneBounds: Bounds, voxelResolution: number, options?: BuildSparseOctreeOptions): SparseOctree;
 export { BLOCK_EMPTY, BLOCK_SOLID, BLOCK_MIXED, BLOCKS_PER_WORD, TYPE_MASK, EVEN_BITS, readBlockType, writeBlockType, SOLID_LO, SOLID_HI, SparseVoxelGrid, };

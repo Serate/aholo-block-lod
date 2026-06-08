@@ -13,14 +13,14 @@ const HASH_MUL = 0x9e3779b9;
  * @param voxelResolution - Size of each voxel in world units.
  * @returns Mesh with positions and indices.
  */
-const voxelFaces = (grid, gridBounds, voxelResolution) => {
+function voxelFaces(grid, gridBounds, voxelResolution) {
     const { nbx, nby, nbz, bStride, types, masks, nx, ny, nz } = grid;
     const totalBlocks = nbx * nby * nbz;
     const coordStride = Math.max(nx, ny, nz) + 1;
     let faceCap = 1024;
     let faceLen = 0;
     let faceKeys = new Float64Array(faceCap);
-    const addFace = (bucket, p, u, v) => {
+    function addFace(bucket, p, u, v) {
         if (faceLen === faceCap) {
             faceCap *= 2;
             const grown = new Float64Array(faceCap);
@@ -28,18 +28,18 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
             faceKeys = grown;
         }
         faceKeys[faceLen++] = ((bucket * coordStride + p) * coordStride + u) * coordStride + v;
-    };
-    const blockTypeAt = (bx, by, bz) => {
+    }
+    function blockTypeAt(bx, by, bz) {
         if (bx < 0 || by < 0 || bz < 0 || bx >= nbx || by >= nby || bz >= nbz) {
             return BLOCK_EMPTY;
         }
         return readBlockType(types, bx + by * nbx + bz * bStride);
-    };
-    const isVoxelSetLocal = (lo, hi, lx, ly, lz) => {
+    }
+    function isVoxelSetLocal(lo, hi, lx, ly, lz) {
         const bitIdx = lx + (ly << 2) + (lz << 4);
         return bitIdx < 32 ? ((lo >>> bitIdx) & 1) !== 0 : ((hi >>> (bitIdx - 32)) & 1) !== 0;
-    };
-    const isVoxelSetGlobal = (ix, iy, iz) => {
+    }
+    function isVoxelSetGlobal(ix, iy, iz) {
         if (ix < 0 || iy < 0 || iz < 0 || ix >= nx || iy >= ny || iz >= nz) {
             return false;
         }
@@ -53,8 +53,8 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
         }
         const s = masks.slot(blockIdx);
         return isVoxelSetLocal(masks.lo[s], masks.hi[s], ix & 3, iy & 3, iz & 3);
-    };
-    const addVoxelFace = (ix, iy, iz, bucket) => {
+    }
+    function addVoxelFace(ix, iy, iz, bucket) {
         switch (bucket) {
             case 0:
                 addFace(0, ix, iy, iz);
@@ -75,12 +75,12 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
                 addFace(5, iz + 1, ix, iy);
                 break; // +Z
         }
-    };
-    const processSolidBlock = (bx, by, bz) => {
+    }
+    function processSolidBlock(bx, by, bz) {
         const x0 = bx << 2;
         const y0 = by << 2;
         const z0 = bz << 2;
-        const emitX = (bucket, neighborBlockType, ix, nx2) => {
+        function emitX(bucket, neighborBlockType, ix, nx2) {
             if (neighborBlockType === BLOCK_SOLID) {
                 return;
             }
@@ -93,8 +93,8 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
                     }
                 }
             }
-        };
-        const emitY = (bucket, neighborBlockType, iy, ny2) => {
+        }
+        function emitY(bucket, neighborBlockType, iy, ny2) {
             if (neighborBlockType === BLOCK_SOLID) {
                 return;
             }
@@ -107,8 +107,8 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
                     }
                 }
             }
-        };
-        const emitZ = (bucket, neighborBlockType, iz, nz2) => {
+        }
+        function emitZ(bucket, neighborBlockType, iz, nz2) {
             if (neighborBlockType === BLOCK_SOLID) {
                 return;
             }
@@ -121,15 +121,15 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
                     }
                 }
             }
-        };
+        }
         emitX(0, blockTypeAt(bx - 1, by, bz), x0, x0 - 1);
         emitX(1, blockTypeAt(bx + 1, by, bz), x0 + 3, x0 + 4);
         emitY(2, blockTypeAt(bx, by - 1, bz), y0, y0 - 1);
         emitY(3, blockTypeAt(bx, by + 1, bz), y0 + 3, y0 + 4);
         emitZ(4, blockTypeAt(bx, by, bz - 1), z0, z0 - 1);
         emitZ(5, blockTypeAt(bx, by, bz + 1), z0 + 3, z0 + 4);
-    };
-    const processMixedBlock = (blockIdx, bx, by, bz) => {
+    }
+    function processMixedBlock(blockIdx, bx, by, bz) {
         const s = masks.slot(blockIdx);
         const lo = masks.lo[s];
         const hi = masks.hi[s];
@@ -166,7 +166,7 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
                 }
             }
         }
-    };
+    }
     for (let w = 0; w < types.length; w++) {
         const word = types[w];
         if (word === 0) {
@@ -206,14 +206,14 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
     let rectV0 = new Int32Array(rectCap);
     let rectU1 = new Int32Array(rectCap);
     let rectV1 = new Int32Array(rectCap);
-    const addRect = (bucket, p, u0, v0, u1, v1) => {
+    function addRect(bucket, p, u0, v0, u1, v1) {
         if (rectLen === rectCap) {
             rectCap *= 2;
-            const grow = (src) => {
+            function grow(src) {
                 const out = new Int32Array(rectCap);
                 out.set(src);
                 return out;
-            };
+            }
             rectBucket = grow(rectBucket);
             rectP = grow(rectP);
             rectU0 = grow(rectU0);
@@ -228,23 +228,23 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
         rectU1[rectLen] = u1;
         rectV1[rectLen] = v1;
         rectLen++;
-    };
+    }
     const keys = faceKeys.subarray(0, faceLen);
     faceKeys = new Float64Array(0);
     keys.sort();
-    const decodeGroup = (key) => {
+    function decodeGroup(key) {
         let q = Math.floor(key / coordStride);
         q = Math.floor(q / coordStride);
         const p = q % coordStride;
         const bucket = Math.floor(q / coordStride);
         return { bucket, p };
-    };
-    const decodeUvKey = (key) => {
+    }
+    function decodeUvKey(key) {
         const v = key % coordStride;
         const q = Math.floor(key / coordStride);
         const u = q % coordStride;
         return u * coordStride + v;
-    };
+    }
     let groupStart = 0;
     while (groupStart < keys.length) {
         const { bucket, p } = decodeGroup(keys[groupStart]);
@@ -264,10 +264,10 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
         const hMask = hCap - 1;
         const hKeys = new Float64Array(hCap).fill(-1);
         const hVals = new Int32Array(hCap);
-        const hash = (key) => {
+        function hash(key) {
             const hi = (key / 0x100000000) | 0;
             return (Math.imul((key | 0) ^ hi, HASH_MUL) >>> 0) & hMask;
-        };
+        }
         for (let i = 0; i < count; i++) {
             const uvKey = decodeUvKey(keys[groupStart + i]);
             let h = hash(uvKey);
@@ -277,7 +277,7 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
             hKeys[h] = uvKey;
             hVals[h] = i;
         }
-        const lookup = (uvKey) => {
+        function lookup(uvKey) {
             let h = hash(uvKey);
             while (true) {
                 const k = hKeys[h];
@@ -289,9 +289,11 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
                 }
                 h = (h + 1) & hMask;
             }
-        };
+        }
         const visited = new Uint8Array(count);
-        const uvKeyOf = (u, v) => u * coordStride + v;
+        function uvKeyOf(u, v) {
+            return u * coordStride + v;
+        }
         for (let i = 0; i < count; i++) {
             if (visited[i]) {
                 continue;
@@ -331,7 +333,7 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
         }
         groupStart = groupEnd;
     }
-    const globalPoint = (axis, p, u, v) => {
+    function globalPoint(axis, p, u, v) {
         if (axis === 0) {
             return [p, u, v];
         }
@@ -339,8 +341,8 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
             return [u, p, v];
         }
         return [u, v, p];
-    };
-    const lineKey = (varAxis, x, y, z) => {
+    }
+    function lineKey(varAxis, x, y, z) {
         if (varAxis === 0) {
             return (y + z * coordStride) * 3;
         }
@@ -348,17 +350,17 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
             return (x + z * coordStride) * 3 + 1;
         }
         return (x + y * coordStride) * 3 + 2;
-    };
+    }
     const linePoints = new Map();
-    const addLinePoint = (key, value) => {
+    function addLinePoint(key, value) {
         let points = linePoints.get(key);
         if (!points) {
             points = [];
             linePoints.set(key, points);
         }
         points.push(value);
-    };
-    const addLineSegment = (x0, y0, z0, x1, y1, z1) => {
+    }
+    function addLineSegment(x0, y0, z0, x1, y1, z1) {
         if (x0 !== x1) {
             const key = lineKey(0, x0, y0, z0);
             addLinePoint(key, x0);
@@ -374,7 +376,7 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
             addLinePoint(key, z0);
             addLinePoint(key, z1);
         }
-    };
+    }
     for (let r = 0; r < rectLen; r++) {
         const axis = rectBucket[r] >> 1;
         const p = rectP[r];
@@ -410,7 +412,7 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
     let perimeterLen = 0;
     let triPrev = new Int32Array(16);
     let triNext = new Int32Array(16);
-    const addPosition = (x, y, z) => {
+    function addPosition(x, y, z) {
         if (posLen + 3 > posCap) {
             posCap *= 2;
             const grown = new Float32Array(posCap);
@@ -422,11 +424,11 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
         positions[posLen++] = gridBounds.min.y + y * voxelResolution;
         positions[posLen++] = gridBounds.min.z + z * voxelResolution;
         return idx;
-    };
-    const vertexKey = (x, y, z) => {
+    }
+    function vertexKey(x, y, z) {
         return x + y * coordStride + z * coordStride * coordStride;
-    };
-    const getVertex = (x, y, z) => {
+    }
+    function getVertex(x, y, z) {
         const key = vertexKey(x, y, z);
         const existing = vertexMap.get(key);
         if (existing !== undefined) {
@@ -435,8 +437,8 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
         const idx = addPosition(x, y, z);
         vertexMap.set(key, idx);
         return idx;
-    };
-    const ensureIndexCapacity = (additional) => {
+    }
+    function ensureIndexCapacity(additional) {
         if (idxLen + additional <= idxCap) {
             return;
         }
@@ -446,17 +448,17 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
         const grown = new Uint32Array(idxCap);
         grown.set(indices);
         indices = grown;
-    };
-    const appendTri = (a, b, c) => {
+    }
+    function appendTri(a, b, c) {
         ensureIndexCapacity(3);
         indices[idxLen++] = a;
         indices[idxLen++] = b;
         indices[idxLen++] = c;
-    };
-    const resetPerimeter = () => {
+    }
+    function resetPerimeter() {
         perimeterLen = 0;
-    };
-    const localUv = (axis, x, y, z) => {
+    }
+    function localUv(axis, x, y, z) {
         if (axis === 0) {
             return [y, z];
         }
@@ -464,8 +466,8 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
             return [x, z];
         }
         return [x, y];
-    };
-    const addPerimeterVertex = (v, u, pv) => {
+    }
+    function addPerimeterVertex(v, u, pv) {
         if (perimeterLen > 0 && perimeterScratch[perimeterLen - 1] === v) {
             return;
         }
@@ -483,8 +485,8 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
         perimeterScratch[perimeterLen++] = v;
         perimeterU[perimeterLen - 1] = u;
         perimeterV[perimeterLen - 1] = pv;
-    };
-    const addEdgeVertices = (axis, x0, y0, z0, x1, y1, z1) => {
+    }
+    function addEdgeVertices(axis, x0, y0, z0, x1, y1, z1) {
         let varAxis;
         let start;
         let end;
@@ -511,10 +513,10 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
         const lo = Math.min(start, end);
         const hi = Math.max(start, end);
         const forward = start <= end;
-        const emitPoint = (x, y, z) => {
+        function emitPoint(x, y, z) {
             const [u, v] = localUv(axis, x, y, z);
             addPerimeterVertex(getVertex(x, y, z), u, v);
-        };
+        }
         if (forward) {
             for (let i = 0; i < points.length; i++) {
                 const t = points[i];
@@ -555,30 +557,30 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
                 }
             }
         }
-    };
-    const isConvexEar = (prev, curr, next) => {
+    }
+    function isConvexEar(prev, curr, next) {
         const ax = perimeterU[curr] - perimeterU[prev];
         const ay = perimeterV[curr] - perimeterV[prev];
         const bx = perimeterU[next] - perimeterU[prev];
         const by = perimeterV[next] - perimeterV[prev];
         return ax * by - ay * bx > 0;
-    };
-    const isNonDegenerateTri = (a, b, c) => {
+    }
+    function isNonDegenerateTri(a, b, c) {
         const ax = perimeterU[b] - perimeterU[a];
         const ay = perimeterV[b] - perimeterV[a];
         const bx = perimeterU[c] - perimeterU[a];
         const by = perimeterV[c] - perimeterV[a];
         return ax * by - ay * bx > 0;
-    };
-    const appendOrientedTri = (a, b, c, useLocalCcw) => {
+    }
+    function appendOrientedTri(a, b, c, useLocalCcw) {
         if (useLocalCcw) {
             appendTri(a, b, c);
         }
         else {
             appendTri(a, c, b);
         }
-    };
-    const triangulatePerimeter = (useLocalCcw) => {
+    }
+    function triangulatePerimeter(useLocalCcw) {
         if (perimeterLen < 3) {
             return;
         }
@@ -623,7 +625,7 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
                 appendOrientedTri(perimeterScratch[a], perimeterScratch[b], perimeterScratch[c], useLocalCcw);
             }
         }
-    };
+    }
     for (let r = 0; r < rectLen; r++) {
         const bucket = rectBucket[r];
         const axis = bucket >> 1;
@@ -656,5 +658,5 @@ const voxelFaces = (grid, gridBounds, voxelResolution) => {
         positions: positions.slice(0, posLen),
         indices: indices.slice(0, idxLen),
     };
-};
+}
 export { voxelFaces };

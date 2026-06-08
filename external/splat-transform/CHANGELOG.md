@@ -1,9 +1,11 @@
 # ChangeLOG
 
-## DEV
+## 1.2.9
 
 - 改进编码风格开启`verbatimModuleSyntax` & `isolatedModules`，迁移至`OXC`
 - 改进native模块加载方式
+- 体素输出更新版本号至1.2，新增支持 gzip 压缩以及一种紧凑的编码方式, 默认均不启用
+- 体素输出默认启用 `filterCluster` 预过滤
 
 ## 1.2.8
 

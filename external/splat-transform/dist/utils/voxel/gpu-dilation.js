@@ -8,7 +8,8 @@ const GPU_BUFFER_USAGE_MAP_READ = 1;
 const GPU_MAP_MODE_READ = 1;
 const CHUNK_INNER = 512;
 const SOLID_WORD = 0x55555555 >>> 0;
-const extractWgsl = () => /* wgsl */ `
+function extractWgsl() {
+    return /* wgsl */ `
 struct ExtractUniforms {
     minBx: i32,
     minBy: i32,
@@ -89,7 +90,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     }
 }
 `;
-const compactWgsl = () => /* wgsl */ `
+}
+function compactWgsl() {
+    return /* wgsl */ `
 struct CompactUniforms {
     haloBx: u32,
     haloBy: u32,
@@ -149,7 +152,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     atomicOr(&typesOut[typeWordIdx], bt << typeBitShift);
 }
 `;
-const dilateXWgsl = () => /* wgsl */ `
+}
+function dilateXWgsl() {
+    return /* wgsl */ `
 struct DilateXUniforms {
     numXWords: u32,
     ny: u32,
@@ -197,7 +202,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     dst[rowOffset + xWord] = output;
 }
 `;
-const dilateYZWgsl = () => /* wgsl */ `
+}
+function dilateYZWgsl() {
+    return /* wgsl */ `
 struct DilateYZUniforms {
     numXWords: u32,
     ny: u32,
@@ -234,18 +241,25 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     dst[outIdx] = output;
 }
 `;
-const makeBuffer = (device, size, usage) => device.createBuffer({ size: Math.max(4, size), usage });
-const writeUniform = (device, values) => {
+}
+function makeBuffer(device, size, usage) {
+    return device.createBuffer({ size: Math.max(4, size), usage });
+}
+function writeUniform(device, values) {
     const buffer = makeBuffer(device, 256, GPU_BUFFER_USAGE_UNIFORM | GPU_BUFFER_USAGE_COPY_DST);
     device.queue.writeBuffer(buffer, 0, values.buffer, values.byteOffset, values.byteLength);
     return buffer;
-};
-const createStoragePipeline = (device, code) => device.createComputePipeline({
-    layout: 'auto',
-    compute: { module: device.createShaderModule({ code }), entryPoint: 'main' },
-});
-const blockAlignedExtent = (halfExtent) => (halfExtent === 0 ? 0 : Math.ceil(halfExtent / 4) * 4);
-const chunkIsEmpty = (src, ox, oy, oz, cx, cy, cz) => {
+}
+function createStoragePipeline(device, code) {
+    return device.createComputePipeline({
+        layout: 'auto',
+        compute: { module: device.createShaderModule({ code }), entryPoint: 'main' },
+    });
+}
+function blockAlignedExtent(halfExtent) {
+    return halfExtent === 0 ? 0 : Math.ceil(halfExtent / 4) * 4;
+}
+function chunkIsEmpty(src, ox, oy, oz, cx, cy, cz) {
     const minBx = Math.max(0, Math.floor(ox / 4));
     const minBy = Math.max(0, Math.floor(oy / 4));
     const minBz = Math.max(0, Math.floor(oz / 4));
@@ -266,8 +280,8 @@ const chunkIsEmpty = (src, ox, oy, oz, cx, cy, cz) => {
         }
     }
     return true;
-};
-const chunkIsSaturated = (src, ox, oy, oz, cx, cy, cz) => {
+}
+function chunkIsSaturated(src, ox, oy, oz, cx, cy, cz) {
     if (ox < 0 || oy < 0 || oz < 0) {
         return false;
     }
@@ -291,8 +305,8 @@ const chunkIsSaturated = (src, ox, oy, oz, cx, cy, cz) => {
         }
     }
     return true;
-};
-const insertSaturatedInner = (dst, innerOx, innerOy, innerOz, innerCx, innerCy, innerCz) => {
+}
+function insertSaturatedInner(dst, innerOx, innerOy, innerOz, innerCx, innerCy, innerCz) {
     const minBx = Math.max(0, innerOx >> 2);
     const minBy = Math.max(0, innerOy >> 2);
     const minBz = Math.max(0, innerOz >> 2);
@@ -322,8 +336,8 @@ const insertSaturatedInner = (dst, innerOx, innerOy, innerOz, innerCx, innerCy, 
             }
         }
     }
-};
-const applyChunkToDst = (dst, typesOut, masksOut, cx, cy, cz, innerNx, innerNy, innerNz) => {
+}
+function applyChunkToDst(dst, typesOut, masksOut, cx, cy, cz, innerNx, innerNy, innerNz) {
     const innerBx = innerNx >> 2;
     const innerBy = innerNy >> 2;
     const innerBz = innerNz >> 2;
@@ -354,7 +368,7 @@ const applyChunkToDst = (dst, typesOut, masksOut, cx, cy, cz, innerNx, innerNy, 
             }
         }
     }
-};
+}
 class GpuDilation {
     static { this.NUM_SLOTS = 2; }
     constructor(device) {
@@ -457,11 +471,12 @@ class GpuDilation {
         this.ensureSlotBuffers(slot, numWords);
         this.ensureSlotOutputBuffers(slot, innerBlocks);
         const uniformBuffers = [];
-        const makeUniform = (values) => {
-            const buffer = writeUniform(this.device, values);
+        const device = this.device;
+        function makeUniform(values) {
+            const buffer = writeUniform(device, values);
             uniformBuffers.push(buffer);
             return buffer;
-        };
+        }
         {
             const encoder = this.device.createCommandEncoder();
             encoder.clearBuffer(slot.bufferA, 0, numWords * 4);
@@ -500,9 +515,9 @@ class GpuDilation {
         }
         {
             const encoder = this.device.createCommandEncoder();
-            const dispatch = (pipeline, src, dst, uniforms, wgX, wgY, wgZ) => {
+            function dispatch(pipeline, src, dst, uniforms, wgX, wgY, wgZ) {
                 const uniformBuffer = makeUniform(uniforms);
-                const bindGroup = this.device.createBindGroup({
+                const bindGroup = device.createBindGroup({
                     layout: pipeline.getBindGroupLayout(0),
                     entries: [
                         { binding: 0, resource: { buffer: uniformBuffer } },
@@ -515,7 +530,7 @@ class GpuDilation {
                 pass.setBindGroup(0, bindGroup);
                 pass.dispatchWorkgroups(wgX, wgY, wgZ);
                 pass.end();
-            };
+            }
             dispatch(this.dilateXPipeline, slot.bufferA, slot.bufferB, new Uint32Array([numXWords, outerNy, outerNz, halfExtentXZ]), Math.ceil(numXWords / 8), Math.ceil(outerNy / 4), Math.ceil(outerNz / 8));
             dispatch(this.dilateYZPipeline, slot.bufferB, slot.bufferA, new Uint32Array([numXWords, outerNy, outerNz, halfExtentXZ, numXWords * outerNy, outerNz]), Math.ceil(numXWords / 8), Math.ceil(outerNy / 4), Math.ceil(outerNz / 8));
             dispatch(this.dilateYZPipeline, slot.bufferA, slot.bufferB, new Uint32Array([numXWords, outerNy, outerNz, halfExtentY, numXWords, outerNy]), Math.ceil(numXWords / 8), Math.ceil(outerNy / 4), Math.ceil(outerNz / 8));
@@ -574,7 +589,7 @@ class GpuDilation {
         }
     }
 }
-export const gpuDilate3 = async (src, halfExtentXZ, halfExtentY) => {
+export async function gpuDilate3(src, halfExtentXZ, halfExtentY) {
     if (halfExtentXZ === 0 && halfExtentY === 0) {
         return src.clone();
     }
@@ -596,7 +611,7 @@ export const gpuDilate3 = async (src, halfExtentXZ, halfExtentY) => {
     const innerStep = CHUNK_INNER & ~3;
     let currentSlot = 0;
     let inflight;
-    const drainInflight = async () => {
+    async function drainInflight() {
         if (!inflight) {
             return;
         }
@@ -604,7 +619,7 @@ export const gpuDilate3 = async (src, halfExtentXZ, halfExtentY) => {
         inflight = undefined;
         const [typesOut, masksOut] = await Promise.all([f.typesPromise, f.masksPromise]);
         applyChunkToDst(dst, typesOut, masksOut, f.cx, f.cy, f.cz, f.innerNx, f.innerNy, f.innerNz);
-    };
+    }
     gpu.uploadSrc(src);
     try {
         for (let cz = 0; cz < src.nz; cz += innerStep) {
@@ -659,4 +674,4 @@ export const gpuDilate3 = async (src, halfExtentXZ, halfExtentY) => {
         gpu.destroy();
     }
     return dst;
-};
+}

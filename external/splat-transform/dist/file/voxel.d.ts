@@ -5,8 +5,11 @@
  * Licensed under the MIT License.
  */
 import { type SplatData } from '../SplatData.js';
+import { type VoxelNodeEncoding } from '../utils/voxel/binary.js';
 import { type NavSeed } from '../utils/voxel/nav.js';
 import { type CollisionMeshShape } from '../utils/voxel/mesh.js';
+import { type FilterClusterOptions } from '../utils/voxel/filter-cluster.js';
+import { decodeMorton3, encodeMorton3, getChildOffset } from '../utils/voxel/common.js';
 type VoxelBackend = 'cpu' | 'gpu';
 type CollisionMeshOption = boolean | CollisionMeshShape;
 interface BoundsBox {
@@ -28,10 +31,13 @@ export declare function writeVoxelFiles(outputDir: string, data: SplatData, opti
         radius: number;
     };
     navSeed?: NavSeed;
+    gzip?: boolean;
+    nodeEncoding?: VoxelNodeEncoding;
+    filterCluster?: boolean | FilterClusterOptions;
 }): Promise<void>;
 export declare const voxelUtils: {
-    getChildOffset: (mask: number, octant: number) => number;
-    encodeMorton3: (x: number, y: number, z: number) => number;
-    decodeMorton3: (m: number) => [number, number, number];
+    getChildOffset: typeof getChildOffset;
+    encodeMorton3: typeof encodeMorton3;
+    decodeMorton3: typeof decodeMorton3;
 };
 export {};

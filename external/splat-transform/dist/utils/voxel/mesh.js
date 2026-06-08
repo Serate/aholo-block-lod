@@ -2,7 +2,7 @@ import { coplanarMerge } from './coplanar-merge.js';
 import { marchingCubes } from './marching-cubes.js';
 import { voxelFaces } from './voxel-faces.js';
 import { logger } from '../Logger.js';
-const encodeGlb = (positions, indices) => {
+function encodeGlb(positions, indices) {
     const vertexCount = positions.length / 3;
     const indexCount = indices.length;
     let minX = Infinity, minY = Infinity, minZ = Infinity;
@@ -94,8 +94,8 @@ const encodeGlb = (positions, indices) => {
     offset += positionsByteLength;
     bytes.set(new Uint8Array(indices.buffer, indices.byteOffset, indicesByteLength), offset);
     return bytes;
-};
-export const buildCollisionMesh = (grid, gridBounds, voxelResolution, shape = 'smooth') => {
+}
+export function buildCollisionMesh(grid, gridBounds, voxelResolution, shape = 'smooth') {
     const nx = Math.round((gridBounds.max.x - gridBounds.min.x) / voxelResolution);
     const ny = Math.round((gridBounds.max.y - gridBounds.min.y) / voxelResolution);
     const nz = Math.round((gridBounds.max.z - gridBounds.min.z) / voxelResolution);
@@ -127,4 +127,4 @@ export const buildCollisionMesh = (grid, gridBounds, voxelResolution, shape = 's
         return undefined;
     }
     return encodeGlb(mesh.positions, mesh.indices);
-};
+}

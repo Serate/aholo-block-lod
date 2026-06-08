@@ -1,9 +1,11 @@
 import { getOrCreateDevice } from '../webgpu.js';
+import { logger } from '../Logger.js';
 import { ALPHA_THRESHOLD, BlockMaskBuffer, GaussianBVH, LEAF_SIZE } from './common.js';
 import { availableParallelism } from 'node:os';
 import { Worker } from 'node:worker_threads';
 /** Per gaussian: increment overlap count for each coarse batch cell its AABB touches (GPU atomics). */
-const buildPerBatchCountsWgsl = () => /* wgsl */ `
+function buildPerBatchCountsWgsl() {
+    return /* wgsl */ `
 struct Uniforms {
     gridMinX: f32,
     gridMinY: f32,
@@ -59,8 +61,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
     }
 }
 `;
+}
 /** Scatter gaussian indices into packed `indices` using prefix `batchOffsets` and per-batch atomic write heads. */
-const fillPerBatchCandidatesWgsl = () => /* wgsl */ `
+function fillPerBatchCandidatesWgsl() {
+    return /* wgsl */ `
 struct Uniforms {
     gridMinX: f32,
     gridMinY: f32,
@@ -120,6 +124,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
     }
 }
 `;
+}
 /**
  * From https://github.com/playcanvas/splat-transform/blob/8f3b843efdc378f97d4f6a66a3a90a2de6d479a4/src/lib/gpu/gpu-voxelization.ts
  * WGSL shader for multi-batch voxelization of 4x4x4 blocks.
@@ -130,7 +135,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
  * Per-batch metadata (index range, block origin, dimensions) comes from a storage buffer,
  * allowing many batches to be dispatched in a single GPU call.
  */
-const voxelizeMultiBatchWgsl = () => /* wgsl */ `
+function voxelizeMultiBatchWgsl() {
+    return /* wgsl */ `
 struct Uniforms {
     opacityCutoff: f32,
     voxelResolution: f32,
@@ -280,6 +286,7 @@ fn main(
     }
 }
 `;
+}
 const GPU_BUFFER_USAGE_STORAGE = 128;
 const GPU_BUFFER_USAGE_COPY_DST = 8;
 const GPU_BUFFER_USAGE_COPY_SRC = 4;
@@ -291,7 +298,7 @@ const GPU_MAP_MODE_READ = 1;
  * Iterates candidate gaussians per batch and writes occupied voxel bits directly.
  */
 const CPU_VOXEL_PARALLEL_MIN_GAUSSIANS = 0;
-const parsePositiveInteger = (value) => {
+function parsePositiveInteger(value) {
     if (typeof value === 'number') {
         return Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
     }
@@ -300,8 +307,8 @@ const parsePositiveInteger = (value) => {
     }
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
-};
-const resolveCpuVoxelWorkerCount = (override) => {
+}
+function resolveCpuVoxelWorkerCount(override) {
     if (override !== undefined) {
         if (override === -1) {
             return Math.max(1, availableParallelism() - 1);
@@ -311,9 +318,9 @@ const resolveCpuVoxelWorkerCount = (override) => {
     return (parsePositiveInteger(process.env.SPLAT_CPU_VOXEL_WORKERS) ??
         parsePositiveInteger(process.env.CPU_VOXEL_WORKERS) ??
         Math.max(1, availableParallelism() - 1));
-};
+}
 const cpuVoxelizeWorkerScript = `
-const { parentPort, workerData } = require('node:worker_threads');
+import { parentPort, workerData } from 'node:worker_threads';
 const {
   voxelResolution, opacityCutoff, alphaThreshold, gridMinX, gridMinY, gridMinZ,
   nBlockX, nBlockY, nBlockXY,
@@ -342,7 +349,7 @@ const sigmaBuffer = new Float32Array(MAX_BATCH_VOXELS);
 const solidBuffer = new Uint8Array(MAX_BATCH_VOXELS);
 const masksLoBuffer = new Uint32Array(MAX_BATCH_BLOCKS);
 const masksHiBuffer = new Uint32Array(MAX_BATCH_BLOCKS);
-const runBatchSet = (batchSpecs, candidateIndices) => {
+function runBatchSet(batchSpecs, candidateIndices) {
   const specs = new Uint32Array(batchSpecs);
   const candidates = new Uint32Array(candidateIndices);
   const packedBlocks = [];
@@ -454,7 +461,7 @@ const runBatchSet = (batchSpecs, candidateIndices) => {
   const packed = new Uint32Array(packedBlocks.length);
   packed.set(packedBlocks);
   return packed.buffer;
-};
+}
 parentPort.on('message', (msg) => {
   if (!msg || typeof msg !== 'object') return;
   if (msg.type === 'shutdown') {
@@ -467,12 +474,12 @@ parentPort.on('message', (msg) => {
   parentPort.postMessage({ taskId, packed }, [packed]);
 });
 `;
-const toSharedFloat32 = (src) => {
+function toSharedFloat32(src) {
     const sab = new SharedArrayBuffer(src.byteLength);
     new Float32Array(sab).set(src);
     return sab;
-};
-const cpuVoxelizeSingleThread = (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, qyCol, qzCol, qwCol, aCol, extents, gridBounds, voxelResolution, opacityCutoff) => {
+}
+function cpuVoxelizeSingleThread(xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, qyCol, qzCol, qwCol, aCol, extents, gridBounds, voxelResolution, opacityCutoff) {
     const nx = Math.max(4, Math.round((gridBounds.max.x - gridBounds.min.x) / voxelResolution));
     const ny = Math.max(4, Math.round((gridBounds.max.y - gridBounds.min.y) / voxelResolution));
     const nz = Math.max(4, Math.round((gridBounds.max.z - gridBounds.min.z) / voxelResolution));
@@ -582,8 +589,8 @@ const cpuVoxelizeSingleThread = (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, q
         output.addBlock(blockLinear, lo, hi);
     }
     return output;
-};
-export const cpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, qyCol, qzCol, qwCol, aCol, extents, gridBounds, voxelResolution, opacityCutoff, options) => {
+}
+export async function cpuVoxelize(xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, qyCol, qzCol, qwCol, aCol, extents, gridBounds, voxelResolution, opacityCutoff, options) {
     if (xCol.length < CPU_VOXEL_PARALLEL_MIN_GAUSSIANS) {
         return cpuVoxelizeSingleThread(xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, qyCol, qzCol, qwCol, aCol, extents, gridBounds, voxelResolution, opacityCutoff);
     }
@@ -629,7 +636,7 @@ export const cpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
                     workerId: slotId,
                     voxelResolution,
                     opacityCutoff,
-                    alphaThreshold: ALPHA_THRESHOLD,
+                    alphaThreshold: options?.alphaThreshold ?? ALPHA_THRESHOLD,
                     gridMinX,
                     gridMinY,
                     gridMinZ,
@@ -673,55 +680,57 @@ export const cpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
                     currentReject = undefined;
                 }
             });
-            const runTask = (batchSpecs, candidateIndices) => new Promise((resolve, reject) => {
-                if (currentResolve) {
-                    reject(new Error(`cpu voxel worker ${slotId} received concurrent task`));
-                    return;
-                }
-                currentResolve = resolve;
-                currentReject = reject;
-                const taskId = nextTaskId++;
-                const batchSpecsBuffer = batchSpecs.buffer;
-                const candidateIndicesBuffer = candidateIndices.buffer;
-                worker.postMessage({
-                    type: 'run',
-                    taskId,
-                    workerId: slotId,
-                    batchSpecs: batchSpecsBuffer,
-                    candidateIndices: candidateIndicesBuffer,
-                }, [batchSpecsBuffer, candidateIndicesBuffer]);
-            });
+            function runTask(batchSpecs, candidateIndices) {
+                return new Promise((resolve, reject) => {
+                    if (currentResolve) {
+                        reject(new Error(`cpu voxel worker ${slotId} received concurrent task`));
+                        return;
+                    }
+                    currentResolve = resolve;
+                    currentReject = reject;
+                    const taskId = nextTaskId++;
+                    const batchSpecsBuffer = batchSpecs.buffer;
+                    const candidateIndicesBuffer = candidateIndices.buffer;
+                    worker.postMessage({
+                        type: 'run',
+                        taskId,
+                        workerId: slotId,
+                        batchSpecs: batchSpecsBuffer,
+                        candidateIndices: candidateIndicesBuffer,
+                    }, [batchSpecsBuffer, candidateIndicesBuffer]);
+                });
+            }
             return { worker, runTask };
         });
-        const addPackedResult = (buf) => {
+        function addPackedResult(buf) {
             const packed = new Uint32Array(buf);
             for (let i = 0; i < packed.length; i += 3) {
                 output.addBlock(packed[i], packed[i + 1], packed[i + 2]);
             }
-        };
+        }
         const availableSlots = pool.map((_slot, slotId) => Promise.resolve(slotId));
-        const dispatchTask = async (batchSpecs, candidateIndices) => {
+        async function dispatchTask(batchSpecs, candidateIndices) {
             const slotId = await Promise.race(availableSlots);
             availableSlots[slotId] = pool[slotId].runTask(batchSpecs, candidateIndices).then(result => {
                 addPackedResult(result.packed);
                 return slotId;
             });
-        };
+        }
         const maxPendingBatches = 256;
         const maxPendingIndices = 2 * 1024 * 1024;
         const totalBlockZ = Math.max(1, (nz + 3) >> 2);
         let pendingSpecs = [];
         let pendingCandidates = new Uint32Array(Math.min(Math.max(1024, xCol.length), maxPendingIndices));
         let pendingCandidateCount = 0;
-        const ensurePendingCandidateCapacity = (needed) => {
+        function ensurePendingCandidateCapacity(needed) {
             if (needed <= pendingCandidates.length) {
                 return;
             }
             const next = new Uint32Array(Math.max(needed, pendingCandidates.length * 2));
             next.set(pendingCandidates.subarray(0, pendingCandidateCount));
             pendingCandidates = next;
-        };
-        const flushPendingTask = async () => {
+        }
+        async function flushPendingTask() {
             if (pendingSpecs.length === 0) {
                 return;
             }
@@ -730,7 +739,7 @@ export const cpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
             pendingSpecs = [];
             pendingCandidateCount = 0;
             await dispatchTask(batchSpecs, candidateIndices);
-        };
+        }
         for (let bz = 0; bz < numBatchZ; bz++) {
             for (let by = 0; by < numBatchY; by++) {
                 for (let bx = 0; bx < numBatchX; bx++) {
@@ -780,18 +789,19 @@ export const cpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
         }));
         return output;
     }
-    catch {
-        // Fallback when worker threads are unavailable or fail.
+    catch (e) {
+        logger.warn(`cpu voxel worker failed, using simplified single-thread fallback; ` +
+            `voxel result may differ from worker/GPU path: ${e instanceof Error ? e.message : String(e)}`);
         return cpuVoxelizeSingleThread(xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, qyCol, qzCol, qwCol, aCol, extents, gridBounds, voxelResolution, opacityCutoff);
     }
-};
+}
 /**
  * GPU voxelization path using tiled multi-batch WGSL dispatch.
  * Per-batch Gaussian indices are built on the GPU (count pass, CPU prefix sum, fill pass) into `indexBuffer`,
  * replacing BVH `queryOverlappingRaw` on reference implementation. Batches are packed into mega-dispatches, then read back
  * as per-block 64-bit masks to populate `BlockMaskBuffer`.
  */
-export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, qyCol, qzCol, qwCol, aCol, extents, gridBounds, voxelResolution, opacityCutoff) => {
+export async function gpuVoxelize(xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, qyCol, qzCol, qwCol, aCol, extents, gridBounds, voxelResolution, opacityCutoff) {
     const FLOATS_PER_GAUSSIAN = 16;
     const UPLOAD_CHUNK_GAUSSIANS = 1 << 18;
     const WORKGROUP_SIZE = 256;
@@ -970,7 +980,7 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
     }
     // BatchInfo struct in WGSL: 5xu32 + 3xf32 packed as 8xu32 per batch.
     const BATCH_INFO_U32S = 8;
-    const createSlot = () => {
+    function createSlot() {
         const uniformBuffer = device.createBuffer({
             size: 256,
             usage: GPU_BUFFER_USAGE_UNIFORM | GPU_BUFFER_USAGE_COPY_DST,
@@ -1006,11 +1016,11 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
             resultsBufferSize: MEGA_MAX_BATCHES * MAX_BLOCKS_PER_BATCH * 2 * 4,
             batchInfoCapacityBytes: MEGA_MAX_BATCHES * BATCH_INFO_U32S * 4,
         };
-    };
+    }
     const slots = [createSlot(), createSlot()];
     let currentSlot = 0;
     let inflight;
-    const ensureSlotCapacity = (slot, batchCount) => {
+    function ensureSlotCapacity(slot, batchCount) {
         const resultBytes = Math.max(8, batchCount * MAX_BLOCKS_PER_BATCH * 2 * 4);
         const batchInfoBytes = Math.max(32, batchCount * BATCH_INFO_U32S * 4);
         if (resultBytes > slot.resultsBufferSize) {
@@ -1056,8 +1066,8 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
                 ],
             });
         }
-    };
-    const processResults = (masks, batches) => {
+    }
+    function processResults(masks, batches) {
         for (let b = 0; b < batches.length; b++) {
             const batch = batches[b];
             const batchResultOffset = b * MAX_BLOCKS_PER_BATCH * 2;
@@ -1078,10 +1088,10 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
                 blockBuffer.addBlock(blockLinear, maskLo, maskHi);
             }
         }
-    };
+    }
     let pendingBatches = [];
     let megaIndexSpan = 0;
-    const flushPendingBatches = async () => {
+    async function flushPendingBatches() {
         if (pendingBatches.length === 0) {
             return;
         }
@@ -1137,7 +1147,7 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
             processResults(done.masks, done.batches);
         }
         inflight = { taskId: taskPromise };
-    };
+    }
     for (let bz = 0; bz < numBatchZ; bz++) {
         for (let by = 0; by < numBatchY; by++) {
             for (let bx = 0; bx < numBatchX; bx++) {
@@ -1195,4 +1205,4 @@ export const gpuVoxelize = async (xCol, yCol, zCol, sxCol, syCol, szCol, qxCol, 
     }
     gaussianBuffer.destroy();
     return blockBuffer;
-};
+}

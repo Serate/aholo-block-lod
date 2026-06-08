@@ -17,7 +17,7 @@ const FACE_MASKS_HI = [
     0x00000000 >>> 0,
     0xffff0000 >>> 0,
 ];
-const forEachNonEmptyBlock = (grid, fn) => {
+function forEachNonEmptyBlock(grid, fn) {
     const totalBlocks = grid.nbx * grid.nby * grid.nbz;
     for (let w = 0; w < grid.types.length; w++) {
         let nonEmpty = ((grid.types[w] & 0x55555555) | ((grid.types[w] >>> 1) & 0x55555555)) >>> 0;
@@ -32,7 +32,7 @@ const forEachNonEmptyBlock = (grid, fn) => {
             nonEmpty &= nonEmpty - 1;
         }
     }
-};
+}
 // Active block-pair extraction for separable dilation passes.
 function getActiveYZPairs(grid) {
     const pairs = new Set();
@@ -381,7 +381,11 @@ function sparseDilate3(src, halfExtentXZ, halfExtentY) {
     b.clear();
     return a;
 }
-const dilate3 = async (src, halfExtentXZ, halfExtentY, backend) => backend === 'gpu' ? gpuDilate3(src, halfExtentXZ, halfExtentY) : sparseDilate3(src, halfExtentXZ, halfExtentY);
+async function dilate3(src, halfExtentXZ, halfExtentY, backend) {
+    return backend === 'gpu'
+        ? gpuDilate3(src, halfExtentXZ, halfExtentY)
+        : sparseDilate3(src, halfExtentXZ, halfExtentY);
+}
 /**
  * Compute reachable empty voxels as visited \ blocked.
  * This keeps only flood-filled cells that are not blocked after dilation.
@@ -460,7 +464,7 @@ function twoLevelBFS(blocked, blockSeeds, voxelSeeds, nx, ny, nz) {
     let vqIy = new Uint32Array(vqCap);
     let vqIz = new Uint32Array(vqCap);
     let vqMask = vqCap - 1, vqHead = 0, vqTail = 0, vqSize = 0;
-    const growBlockQueue = () => {
+    function growBlockQueue() {
         const newCap = bqCap << 1;
         const nb = new Uint32Array(newCap);
         for (let i = 0; i < bqSize; i++) {
@@ -471,8 +475,8 @@ function twoLevelBFS(blocked, blockSeeds, voxelSeeds, nx, ny, nz) {
         bqMask = newCap - 1;
         bqHead = 0;
         bqTail = bqSize;
-    };
-    const growVoxelQueue = () => {
+    }
+    function growVoxelQueue() {
         const newCap = vqCap << 1;
         const nix = new Uint32Array(newCap);
         const niy = new Uint32Array(newCap);
@@ -490,8 +494,8 @@ function twoLevelBFS(blocked, blockSeeds, voxelSeeds, nx, ny, nz) {
         vqMask = newCap - 1;
         vqHead = 0;
         vqTail = vqSize;
-    };
-    const enqueueVoxel = (ix, iy, iz) => {
+    }
+    function enqueueVoxel(ix, iy, iz) {
         if (vqSize >= vqCap) {
             growVoxelQueue();
         }
@@ -500,8 +504,8 @@ function twoLevelBFS(blocked, blockSeeds, voxelSeeds, nx, ny, nz) {
         vqIz[vqTail] = iz;
         vqTail = (vqTail + 1) & vqMask;
         vqSize++;
-    };
-    const tryFillBlock = (blockIdx) => {
+    }
+    function tryFillBlock(blockIdx) {
         if (readBlockType(blocked.types, blockIdx) !== BLOCK_EMPTY) {
             return false;
         }
@@ -516,8 +520,8 @@ function twoLevelBFS(blocked, blockSeeds, voxelSeeds, nx, ny, nz) {
         bqTail = (bqTail + 1) & bqMask;
         bqSize++;
         return true;
-    };
-    const enqueueFaceVoxels = (nBlockIdx, face, nBx, nBy, nBz) => {
+    }
+    function enqueueFaceVoxels(nBlockIdx, face, nBx, nBy, nBz) {
         const vbt = readBlockType(visited.types, nBlockIdx);
         if (vbt === BLOCK_SOLID) {
             return;
@@ -560,8 +564,8 @@ function twoLevelBFS(blocked, blockSeeds, voxelSeeds, nx, ny, nz) {
             enqueueVoxel(baseIx + (bi & 3), baseIy + ((bi >> 2) & 3), baseIz + (bi >> 4));
             bits &= bits - 1;
         }
-    };
-    const processBlock = (blockIdx) => {
+    }
+    function processBlock(blockIdx) {
         const bx = blockIdx % nbx;
         const byBz = (blockIdx / nbx) | 0;
         const by = byBz % nby;
@@ -626,8 +630,8 @@ function twoLevelBFS(blocked, blockSeeds, voxelSeeds, nx, ny, nz) {
                 enqueueFaceVoxels(ni, 4, bx, by, bz + 1);
             }
         }
-    };
-    const tryEnqueueVoxel = (ix, iy, iz) => {
+    }
+    function tryEnqueueVoxel(ix, iy, iz) {
         const blockIdx = (ix >> 2) + (iy >> 2) * nbx + (iz >> 2) * bStride;
         const bbt = readBlockType(blocked.types, blockIdx);
         if (bbt === BLOCK_SOLID) {
@@ -667,7 +671,7 @@ function twoLevelBFS(blocked, blockSeeds, voxelSeeds, nx, ny, nz) {
             vMasks.set(blockIdx, bitIdx < 32 ? (1 << bitIdx) >>> 0 : 0, bitIdx >= 32 ? (1 << (bitIdx - 32)) >>> 0 : 0);
         }
         enqueueVoxel(ix, iy, iz);
-    };
+    }
     for (let i = 0; i < blockSeeds.length; i++) {
         tryFillBlock(blockSeeds[i]);
     }
@@ -734,7 +738,7 @@ export async function fillExterior(gridOriginal, gridBounds, voxelResolution, di
     const bStride = nbx * nby;
     const blockSeeds = [];
     const faceVoxelSeeds = [];
-    const seedBoundaryBlock = (blockIdx, bx, by, bz, face) => {
+    function seedBoundaryBlock(blockIdx, bx, by, bz, face) {
         const bt = readBlockType(dilated.types, blockIdx);
         if (bt === BLOCK_SOLID) {
             return;
@@ -761,7 +765,7 @@ export async function fillExterior(gridOriginal, gridBounds, voxelResolution, di
             faceVoxelSeeds.push({ ix: baseIx + (bi & 3), iy: baseIy + ((bi >> 2) & 3), iz: baseIz + (bi >> 4) });
             freeHi &= freeHi - 1;
         }
-    };
+    }
     for (let bz = 0; bz < nbz; bz++) {
         for (let by = 0; by < nby; by++) {
             seedBoundaryBlock(by * nbx + bz * bStride, 0, by, bz, 0);

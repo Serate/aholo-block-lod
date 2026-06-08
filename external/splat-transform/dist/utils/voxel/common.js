@@ -1,5 +1,5 @@
 /** 3D Morton (Z-order) for integer block coordinates. */
-export const encodeMorton3 = (x, y, z) => {
+export function encodeMorton3(x, y, z) {
     let result = 0;
     let shift = 1;
     for (let i = 0; i < 17; i++) {
@@ -18,8 +18,8 @@ export const encodeMorton3 = (x, y, z) => {
         shift *= 8;
     }
     return result;
-};
-export const decodeMorton3 = (m) => {
+}
+export function decodeMorton3(m) {
     let x = 0, y = 0, z = 0;
     let bit = 1;
     while (m > 0) {
@@ -37,11 +37,11 @@ export const decodeMorton3 = (m) => {
         m = Math.trunc(m / 8);
     }
     return [x, y, z];
-};
+}
 /** Voxel leaf edge length in voxels (4³ block). */
 export const LEAF_SIZE = 4;
 export const ALPHA_THRESHOLD = 1 / 255;
-export const alignGridBounds = (bounds, voxelResolution) => {
+export function alignGridBounds(bounds, voxelResolution) {
     const blockSize = LEAF_SIZE * voxelResolution;
     return {
         min: {
@@ -55,9 +55,27 @@ export const alignGridBounds = (bounds, voxelResolution) => {
             z: Math.ceil(bounds.max.z / blockSize) * blockSize,
         },
     };
-};
+}
+/**
+ * Max linear block index (signed 32-bit): BlockMaskMap keys, worker `blockIdx >>> 0`,
+ * and types bitmap indexing. Implies types bitmap <= ceil(MAX / 16) * 4 ~= 512 MB.
+ */
+export const MAX_VOXEL_BLOCK_COUNT_INT32 = 0x7fff_ffff;
+/** Preflight hard grid limits before voxelization allocates the types bitmap. */
+export function checkVoxelGridCapacity(gridBounds, voxelResolution) {
+    const blockSize = LEAF_SIZE * voxelResolution;
+    const nbx = Math.round((gridBounds.max.x - gridBounds.min.x) / blockSize);
+    const nby = Math.round((gridBounds.max.y - gridBounds.min.y) / blockSize);
+    const nbz = Math.round((gridBounds.max.z - gridBounds.min.z) / blockSize);
+    const totalBlocks = nbx * nby * nbz;
+    if (totalBlocks > MAX_VOXEL_BLOCK_COUNT_INT32) {
+        throw new Error(`voxel grid block count ${totalBlocks} exceeds limit ${MAX_VOXEL_BLOCK_COUNT_INT32} ` +
+            `(linear block index must fit in 31 bits). ` +
+            `Tighten the box parameter or increase voxelResolution. grid blocks=${nbx}x${nby}x${nbz}`);
+    }
+}
 /** Opacity-aware AABB half-extents from scale + unit quaternion. */
-export const extentsFromQuatScale = (sx, sy, sz, qx, qy, qz, qw, opacity, opacityThreshold = ALPHA_THRESHOLD) => {
+export function extentsFromQuatScale(sx, sy, sz, qx, qy, qz, qw, opacity, opacityThreshold = ALPHA_THRESHOLD) {
     let extend = 3;
     if (opacity !== undefined && opacity > opacityThreshold) {
         // Tight bound from opacity threshold, clamped by default 3-sigma bound.
@@ -103,17 +121,19 @@ export const extentsFromQuatScale = (sx, sy, sz, qx, qy, qz, qw, opacity, opacit
     const ey = abs10 * sX + abs11 * sY + abs12 * sZ;
     const ez = abs20 * sX + abs21 * sY + abs22 * sZ;
     return { ex, ey, ez };
-};
-const boundsOverlap = (a, bMinX, bMinY, bMinZ, bMaxX, bMaxY, bMaxZ) => {
+}
+function boundsOverlap(a, bMinX, bMinY, bMinZ, bMaxX, bMaxY, bMaxZ) {
     return !(a.maxX < bMinX || a.minX > bMaxX || a.maxY < bMinY || a.minY > bMaxY || a.maxZ < bMinZ || a.minZ > bMaxZ);
-};
-const quickselect = (axisData, idx, k) => {
-    const valAt = (p) => axisData[idx[p]];
-    const swap = (i, j) => {
+}
+function quickselect(axisData, idx, k) {
+    function valAt(p) {
+        return axisData[idx[p]];
+    }
+    function swap(i, j) {
         const t = idx[i];
         idx[i] = idx[j];
         idx[j] = t;
-    };
+    }
     const n = idx.length;
     let l = 0;
     let r = n - 1;
@@ -160,7 +180,7 @@ const quickselect = (axisData, idx, k) => {
             l = i;
         }
     }
-};
+}
 export class GaussianBVH {
     static { this.MAX_LEAF_SIZE = 64; }
     constructor(x, y, z, extents) {
@@ -308,16 +328,16 @@ const SOLID_LO = 0xffffffff >>> 0;
 const SOLID_HI = 0xffffffff >>> 0;
 const SOLID_MASK = 0xffffffff >>> 0;
 const INITIAL_BLOCK_BUFFER_CAPACITY = 1024;
-const growFloat64 = (src, newCap) => {
+function growFloat64(src, newCap) {
     const grown = new Float64Array(newCap);
     grown.set(src);
     return grown;
-};
-const growUint32 = (src, newCap) => {
+}
+function growUint32(src, newCap) {
     const grown = new Uint32Array(newCap);
     grown.set(src);
     return grown;
-};
+}
 /**
  * Append-only buffer for streaming voxelization results.
  * Stores (linear blockIdx, voxel mask) pairs for non-empty 4x4x4 blocks.
@@ -392,17 +412,26 @@ const BLOCK_MIXED = 2;
 const TYPE_MASK = 0x3;
 const BLOCKS_PER_WORD = 16;
 const EVEN_BITS = 0x55555555 >>> 0;
-const readBlockType = (types, blockIdx) => {
-    const word = blockIdx >>> 4;
-    const shift = (blockIdx & 15) << 1;
+function getBlockTypeWordIndex(blockIdx) {
+    return Math.floor(blockIdx / BLOCKS_PER_WORD);
+}
+function getBlockTypeBitShift(blockIdx) {
+    return (blockIdx % BLOCKS_PER_WORD) << 1;
+}
+function getBlockTypeWordCount(totalBlocks) {
+    return Math.ceil(totalBlocks / BLOCKS_PER_WORD);
+}
+function readBlockType(types, blockIdx) {
+    const word = getBlockTypeWordIndex(blockIdx);
+    const shift = getBlockTypeBitShift(blockIdx);
     return (types[word] >>> shift) & TYPE_MASK;
-};
-const writeBlockType = (types, blockIdx, blockType) => {
-    const word = blockIdx >>> 4;
-    const shift = (blockIdx & 15) << 1;
+}
+function writeBlockType(types, blockIdx, blockType) {
+    const word = getBlockTypeWordIndex(blockIdx);
+    const shift = getBlockTypeBitShift(blockIdx);
     const mask = TYPE_MASK << shift;
     types[word] = (types[word] & ~mask) | ((blockType & TYPE_MASK) << shift);
-};
+}
 const EMPTY = -1;
 class BlockMaskMap {
     constructor(initialCapacity = 4096) {
@@ -513,7 +542,7 @@ class SparseVoxelGrid {
         this.nbz = nz >> 2;
         this.bStride = this.nbx * this.nby;
         const totalBlocks = this.nbx * this.nby * this.nbz;
-        this.types = new Uint32Array((totalBlocks + BLOCKS_PER_WORD - 1) >>> 4);
+        this.types = new Uint32Array(getBlockTypeWordCount(totalBlocks));
         this.masks = new BlockMaskMap();
     }
     getVoxel(ix, iy, iz) {
@@ -1018,28 +1047,37 @@ class SparseVoxelGrid {
     }
 }
 export const SOLID_LEAF_MARKER = 0xff000000 >>> 0;
-const MAX_24BIT_OFFSET = 0x00ffffff;
+export const MAX_24BIT_OFFSET = 0x00ffffff;
 const DENSE_SOLID_STREAM_THRESHOLD = 8_000_000;
-export const getChildOffset = (mask, octant) => {
+export class SparseOctree24BitOverflowError extends Error {
+    constructor(kind, actual, limit) {
+        super(`Sparse octree ${kind} count (${actual}) exceeds the Laine-Karras 24-bit baseOffset limit (${limit}). Reduce the grid size or split the scene.`);
+        this.name = 'SparseOctree24BitOverflowError';
+        this.kind = kind;
+        this.actual = actual;
+        this.limit = limit;
+    }
+}
+export function getChildOffset(mask, octant) {
     const prefix = mask & ((1 << octant) - 1);
     let n = prefix >>> 0;
     n -= (n >>> 1) & 0x55555555;
     n = (n & 0x33333333) + ((n >>> 2) & 0x33333333);
     return (((n + (n >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
-};
-const bitCount = (n) => {
+}
+function bitCount(n) {
     let v = n >>> 0;
     v -= (v >>> 1) & 0x55555555;
     v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
     return (((v + (v >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
-};
-const sortMixedByMorton = (mortons, masks, n = mortons.length) => {
+}
+function sortMixedByMorton(mortons, masks, n = mortons.length) {
     if (n <= 1) {
         return;
     }
     const stackLo = [0];
     const stackHi = [n - 1];
-    const swap = (a, b) => {
+    function swap(a, b) {
         const km = mortons[a];
         mortons[a] = mortons[b];
         mortons[b] = km;
@@ -1049,7 +1087,7 @@ const sortMixedByMorton = (mortons, masks, n = mortons.length) => {
         masks[a * 2 + 1] = masks[b * 2 + 1];
         masks[b * 2] = alo;
         masks[b * 2 + 1] = ahi;
-    };
+    }
     while (stackLo.length > 0) {
         const lo = stackLo.pop();
         const hi = stackHi.pop();
@@ -1120,18 +1158,18 @@ const sortMixedByMorton = (mortons, masks, n = mortons.length) => {
             }
         }
     }
-};
+}
 var OctreeNodeType;
 (function (OctreeNodeType) {
     OctreeNodeType[OctreeNodeType["Empty"] = 0] = "Empty";
     OctreeNodeType[OctreeNodeType["Solid"] = 1] = "Solid";
     OctreeNodeType[OctreeNodeType["Mixed"] = 2] = "Mixed";
 })(OctreeNodeType || (OctreeNodeType = {}));
-const createInteriorWave = (initialCapacity) => {
+function createInteriorWave(initialCapacity) {
     const cap = Math.max(16, initialCapacity);
     return { pos: new Uint32Array(cap), li: new Uint32Array(cap), ii: new Uint32Array(cap), length: 0 };
-};
-const pushInteriorWave = (wave, pos, li, ii) => {
+}
+function pushInteriorWave(wave, pos, li, ii) {
     if (wave.length === wave.pos.length) {
         const cap = wave.pos.length * 2;
         const grownPos = new Uint32Array(cap);
@@ -1148,11 +1186,11 @@ const pushInteriorWave = (wave, pos, li, ii) => {
     wave.pos[i] = pos;
     wave.li[i] = li;
     wave.ii[i] = ii;
-};
-const shouldUseDenseMipBuild = (totalBlocks, nSolid, nMixed) => {
+}
+function shouldUseDenseMipBuild(totalBlocks, nSolid, nMixed) {
     return nSolid >= DENSE_SOLID_STREAM_THRESHOLD && nSolid > nMixed * 4 && nSolid > totalBlocks * 0.25;
-};
-const buildDenseTypeLevels = (grid, maxDepth) => {
+}
+function buildDenseTypeLevels(grid, maxDepth) {
     const levels = [
         {
             types: grid.types,
@@ -1168,7 +1206,7 @@ const buildDenseTypeLevels = (grid, maxDepth) => {
         const nby = Math.max(1, Math.ceil(prev.nby / 2));
         const nbz = Math.max(1, Math.ceil(prev.nbz / 2));
         const total = nbx * nby * nbz;
-        const types = new Uint32Array((total + BLOCKS_PER_WORD - 1) >>> 4);
+        const types = new Uint32Array(getBlockTypeWordCount(total));
         const prevStride = prev.nbx * prev.nby;
         const stride = nbx * nby;
         let nonEmptyCount = 0;
@@ -1216,8 +1254,8 @@ const buildDenseTypeLevels = (grid, maxDepth) => {
         }
     }
     return levels;
-};
-const lowerBoundF64 = (arr, target, n) => {
+}
+function lowerBoundF64(arr, target, n) {
     let lo = 0;
     let hi = n;
     while (lo < hi) {
@@ -1230,8 +1268,8 @@ const lowerBoundF64 = (arr, target, n) => {
         }
     }
     return lo;
-};
-const flattenTreeFromLevels = (interiorLevels, solidStream, mixedStream, mixedMasks, nSolid, nMixed, gridBounds, sceneBounds, voxelResolution, treeDepth) => {
+}
+function flattenTreeFromLevels(interiorLevels, solidStream, mixedStream, mixedMasks, nSolid, nMixed, gridBounds, sceneBounds, voxelResolution, treeDepth) {
     if (interiorLevels.length === 0) {
         return {
             gridBounds,
@@ -1279,7 +1317,7 @@ const flattenTreeFromLevels = (interiorLevels, solidStream, mixedStream, mixedMa
                 if (ii < nMixed) {
                     const leafDataIndex = leafDataLen >> 1;
                     if (leafDataIndex > MAX_24BIT_OFFSET) {
-                        throw new Error(`Sparse octree mixed-leaf count (${leafDataIndex + 1}) exceeds the Laine-Karras 24-bit baseOffset limit (${MAX_24BIT_OFFSET + 1}). Reduce the grid size or split the scene.`);
+                        throw new SparseOctree24BitOverflowError('mixed-leaf', leafDataIndex + 1, MAX_24BIT_OFFSET + 1);
                     }
                     leafData[leafDataLen++] = mixedMasks[ii * 2];
                     leafData[leafDataLen++] = mixedMasks[ii * 2 + 1];
@@ -1314,7 +1352,7 @@ const flattenTreeFromLevels = (interiorLevels, solidStream, mixedStream, mixedMa
             const childMask = intMask[j];
             const childCount = bitCount(childMask);
             if (nextChildStart > MAX_24BIT_OFFSET) {
-                throw new Error(`Sparse octree node count (${nextChildStart + 1}) exceeds the Laine-Karras 24-bit baseOffset limit (${MAX_24BIT_OFFSET + 1}). Reduce the grid size or split the scene.`);
+                throw new SparseOctree24BitOverflowError('node', nextChildStart + 1, MAX_24BIT_OFFSET + 1);
             }
             nodes[intPos[j]] = ((childMask & 0xff) << 24) | nextChildStart;
             const myLi = intLi[j];
@@ -1383,8 +1421,8 @@ const flattenTreeFromLevels = (interiorLevels, solidStream, mixedStream, mixedMa
         nodes: emitPos === maxNodes ? nodes : nodes.slice(0, emitPos),
         leafData: leafDataLen === leafData.length ? leafData : leafData.slice(0, leafDataLen),
     };
-};
-const flattenDenseLevels = (levels, grid, gridBounds, sceneBounds, voxelResolution) => {
+}
+function flattenDenseLevels(levels, grid, gridBounds, sceneBounds, voxelResolution) {
     const treeDepth = Math.max(1, levels.length - 1);
     const rootLi = levels.length - 1;
     const rootLevel = levels[rootLi];
@@ -1408,7 +1446,7 @@ const flattenDenseLevels = (levels, grid, gridBounds, sceneBounds, voxelResoluti
     let leafDataLen = 0;
     let numInteriorNodes = 0;
     let numMixedLeaves = 0;
-    const appendNode = (value) => {
+    function appendNode(value) {
         if (nodeLen === nodes.length) {
             const grown = new Uint32Array(nodes.length * 2);
             grown.set(nodes);
@@ -1416,11 +1454,11 @@ const flattenDenseLevels = (levels, grid, gridBounds, sceneBounds, voxelResoluti
         }
         nodes[nodeLen] = value >>> 0;
         return nodeLen++;
-    };
-    const appendMixedLeaf = (blockIdx) => {
+    }
+    function appendMixedLeaf(blockIdx) {
         const leafDataIndex = leafDataLen >> 1;
         if (leafDataIndex > MAX_24BIT_OFFSET) {
-            throw new Error(`Sparse octree mixed-leaf count (${leafDataIndex + 1}) exceeds the Laine-Karras 24-bit baseOffset limit (${MAX_24BIT_OFFSET + 1}). Reduce the grid size or split the scene.`);
+            throw new SparseOctree24BitOverflowError('mixed-leaf', leafDataIndex + 1, MAX_24BIT_OFFSET + 1);
         }
         if (leafDataLen + 2 > leafData.length) {
             const grown = new Uint32Array(leafData.length * 2);
@@ -1432,10 +1470,10 @@ const flattenDenseLevels = (levels, grid, gridBounds, sceneBounds, voxelResoluti
         leafData[leafDataLen++] = grid.masks.hi[s];
         appendNode(leafDataIndex);
         numMixedLeaves++;
-    };
+    }
     let curWave = createInteriorWave(1);
     let nextWave = createInteriorWave(1024);
-    const appendDenseNode = (li, idx, wave) => {
+    function appendDenseNode(li, idx, wave) {
         const level = levels[li];
         const bt = readBlockType(level.types, idx);
         if (bt === BLOCK_SOLID) {
@@ -1446,7 +1484,7 @@ const flattenDenseLevels = (levels, grid, gridBounds, sceneBounds, voxelResoluti
             pushInteriorWave(wave, pos, li, idx);
             numInteriorNodes++;
         }
-    };
+    }
     appendDenseNode(rootLi, 0, curWave);
     while (curWave.length > 0) {
         nextWave.length = 0;
@@ -1467,7 +1505,7 @@ const flattenDenseLevels = (levels, grid, gridBounds, sceneBounds, voxelResoluti
             const childStart = nodeLen;
             let childMask = 0;
             if (childStart > MAX_24BIT_OFFSET) {
-                throw new Error(`Sparse octree node count (${childStart + 1}) exceeds the Laine-Karras 24-bit baseOffset limit (${MAX_24BIT_OFFSET + 1}). Reduce the grid size or split the scene.`);
+                throw new SparseOctree24BitOverflowError('node', childStart + 1, MAX_24BIT_OFFSET + 1);
             }
             for (let oct = 0; oct < 8; oct++) {
                 const cx = childX0 + (oct & 1);
@@ -1512,22 +1550,22 @@ const flattenDenseLevels = (levels, grid, gridBounds, sceneBounds, voxelResoluti
         nodes: nodes.slice(0, nodeLen),
         leafData: leafData.slice(0, leafDataLen),
     };
-};
-const buildSparseOctreeDense = (grid, gridBounds, sceneBounds, voxelResolution, maxDepth, consumeGrid) => {
+}
+function buildSparseOctreeDense(grid, gridBounds, sceneBounds, voxelResolution, maxDepth, consumeGrid) {
     const levels = buildDenseTypeLevels(grid, maxDepth);
     const result = flattenDenseLevels(levels, grid, gridBounds, sceneBounds, voxelResolution);
     if (consumeGrid) {
         grid.releaseStorage();
     }
     return result;
-};
+}
 /**
  * Build a sparse octree from block masks using:
  * 1) mixed+solid SoA merge and Morton sort
  * 2) bottom-up level construction by parent Morton grouping
  * 3) BFS flatten to node/leafData arrays.
  */
-export const buildSparseOctree = (grid, gridBounds, sceneBounds, voxelResolution, options = {}) => {
+export function buildSparseOctree(grid, gridBounds, sceneBounds, voxelResolution, options = {}) {
     const { nbx, nby, nbz, types: gridTypes, masks: gridMasks } = grid;
     const totalBlocks = nbx * nby * nbz;
     const blocksPerAxis = Math.max(nbx, nby, nbz);
@@ -1710,5 +1748,5 @@ export const buildSparseOctree = (grid, gridBounds, sceneBounds, voxelResolution
         interiorLevels.push({ mortons: curMortons, types: curTypes, childMasks: curChildMasks });
     }
     return flattenTreeFromLevels(interiorLevels, solidStream, mixedStream, mixedMasks, nSolid, nMixed, gridBounds, sceneBounds, voxelResolution, actualDepth);
-};
+}
 export { BLOCK_EMPTY, BLOCK_SOLID, BLOCK_MIXED, BLOCKS_PER_WORD, TYPE_MASK, EVEN_BITS, readBlockType, writeBlockType, SOLID_LO, SOLID_HI, SparseVoxelGrid, };
