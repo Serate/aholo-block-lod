@@ -725,11 +725,6 @@ class RenderSessionRenderer implements RuntimeRenderer {
                         enabled: false,
                     },
                 },
-                Splatting: {
-                    preBlurAmount: 0.3,
-                    blurAmount: 0,
-                    focalAdjustment: 2,
-                },
                 TAA: {
                     enabled: false,
                 },

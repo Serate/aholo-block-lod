@@ -9,9 +9,6 @@ export default async function runner({ renderer, control, loading, indexedDB, si
         pipeline: {
             Splatting: {
                 enabled: true,
-                preBlurAmount: 0.3,
-                blurAmount: 0,
-                focalAdjustment: 2,
                 toneMapping: {
                     enabled: true,
                     toneMapping: ToneMapping.Neutral,

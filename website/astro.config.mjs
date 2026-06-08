@@ -4,6 +4,7 @@ import { createReadStream, existsSync } from 'node:fs';
 import { copyFile, mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import checker from 'vite-plugin-checker';
 import {
     assetsPrefix,
     astroAssetsDir,
@@ -84,6 +85,9 @@ export default defineConfig({
             },
         },
         plugins: [
+            checker({
+                typescript: true,
+            }),
             manualAssetsPlugin(),
             manualContentReloadPlugin(),
             examplesContentReloadPlugin(),

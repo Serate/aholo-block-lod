@@ -86,16 +86,6 @@ npm install --save-dev vite typescript # TypeScript is recommended.
                 },
                 Splatting: {
                     enabled: true,
-                    precalculateEnabled: true,
-                    normalizedFalloff: false,
-                    preBlurAmount: 0.3,
-                    blurAmount: 0,
-                    focalAdjustment: 2,
-                    detailCullingThreshold: 0,
-                    composite: {
-                        enabled: true,
-                        highPrecisionAttachEnabled: true,
-                    },
                 },
                 TAA: {
                     enabled: false,

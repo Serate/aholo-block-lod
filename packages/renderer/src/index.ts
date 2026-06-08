@@ -240,34 +240,48 @@ export interface ICompositePluginConfig {
 
 export interface ISplattingPluginConfig {
     enabled?: boolean;
-    precalculateEnabled?: boolean;
-    repackEnabled?: boolean;
-    packHighPrecisionEnabled?: boolean;
-    preBlurAmount?: number;
-    blurAmount?: number;
-    focalAdjustment?: number;
-    maxStdDev?: number;
-    maxPixelRadius?: number;
-    detailCullingThreshold?: number;
-    normalizedFalloff?: boolean;
-    selectedColor?: Vector4;
+    /**
+     * gaussian pack
+     */
+    pack?: {
+        highPrecisionEnabled?: boolean;
+        precalculateEnabled?: boolean;
+        cameraRelativeEnabled?: boolean;
+        cameraRelativeUpdateDistanceThreshold?: number;
+        sortedLayoutEnabled?: boolean;
+    };
+    /**
+     * gaussian raster
+     */
+    raster?: {
+        mode?: __INTERNAL__.SplattingRenderMode;
+        preBlurAmount?: number;
+        blurAmount?: number;
+        focalAdjustment?: number;
+        maxStdDev?: number;
+        maxPixelRadius?: number;
+        detailCullingThreshold?: number;
+        normalizedFalloff?: boolean;
+        selectedColor?: Vector4;
+    };
     /**
      * gaussian sorting
      */
     sort?: {
-        sortRadial?: boolean;
-        sortMinDuration?: number;
+        highPrecisionEnabled?: boolean;
+        minIntervalMs?: number;
         sortSplatDistance?: number;
         sortSplatCoorient?: number;
         sortCameraDistance?: number;
         sortCameraCoorient?: number;
+        depthBias?: number;
     };
     /**
      * composite before output
      */
     composite?: {
         enabled?: boolean;
-        highPrecisionAttachEnabled?: boolean;
+        highPrecisionEnabled?: boolean;
     };
     /**
      * tone mapping functions

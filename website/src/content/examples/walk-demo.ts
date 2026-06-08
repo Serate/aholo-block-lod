@@ -1514,7 +1514,6 @@ const WALK_CAMERA = {
 const LOD_MAGIC_CODE = 2500660;
 const WALK_SPLAT_PACK_TYPE = SplatPackType.Compressed;
 const WALK_MAX_SH_DEGREE = 3;
-const WALK_MAX_STD_DEV = 5;
 
 type WalkLodMeta = SplatUtils.LodMeta;
 type LodSplatInstance = InstanceType<typeof LodSplat>;
@@ -1583,12 +1582,6 @@ class WalkDemoScene {
                 },
                 Splatting: {
                     enabled: true,
-                    preBlurAmount: 0.3,
-                    blurAmount: 0,
-                    focalAdjustment: 2,
-                    maxStdDev: Math.sqrt(WALK_MAX_STD_DEV),
-                    detailCullingThreshold: 0,
-                    packHighPrecisionEnabled: true,
                 },
                 TAA: { enabled: false },
             },

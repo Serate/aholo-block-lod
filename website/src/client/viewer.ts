@@ -35,7 +35,14 @@ const SUPPORTED_FILE_EXTENSIONS = ['.ply', '.spz', '.splat', '.ksplat', '.lcc', 
 type SplatFileTypeValue = (typeof SplatFileType)[keyof typeof SplatFileType];
 type SplatPackTypeValue = (typeof SplatPackType)[keyof typeof SplatPackType];
 type ToneMappingValue = (typeof ToneMapping)[keyof typeof ToneMapping];
-type SplattingPresetId = 'custom' | 'maxQuality' | 'qualityFirst' | 'performanceFirst' | 'extremePerformance';
+type SplattingPresetId =
+    | 'custom'
+    | 'maxQuality'
+    | 'qualityFirst'
+    | 'balanced'
+    | 'performanceFirst'
+    | 'extremePerformance0'
+    | 'extremePerformance1';
 type SplatObject = Awaited<ReturnType<typeof createSplat>>;
 type LodSplatInstance = InstanceType<typeof LodSplat>;
 type LodMeta = ConstructorParameters<typeof LodSplat>[0] & {
@@ -56,8 +63,10 @@ interface ViewerLabels {
     presetCustom: string;
     presetMaxQuality: string;
     presetQualityFirst: string;
+    presetBalanced: string;
     presetPerformanceFirst: string;
-    presetExtremePerformance: string;
+    presetExtremePerformance0: string;
+    presetExtremePerformance1: string;
     presetPackTypeTip: string;
     packTypeTip: string;
     statusReady: string;
@@ -98,7 +107,9 @@ interface ViewerParams {
     maxStdDev: number;
     packHighPrecisionEnabled: boolean;
     precalculateEnabled: boolean;
-    repackEnabled: boolean;
+    cameraRelativeEnabled: boolean;
+    sortedLayoutEnabled: boolean;
+    autoFreeResourceOnGpuPacked: boolean;
     renderAttachHighPrecisionEnabled: boolean;
     normalizedFalloff: boolean;
     preBlurAmount: number;
@@ -106,12 +117,12 @@ interface ViewerParams {
     focalAdjustment: number;
     detailCullingThreshold: number;
     maxPixelRadius: number;
-    sortRadial: boolean;
-    sortMinDuration: number;
+    minIntervalMs: number;
     sortSplatDistance: number;
     sortSplatCoorient: number;
     sortCameraDistance: number;
     sortCameraCoorient: number;
+    sortHighPrecisionEnabled: boolean;
     toneMappingEnabled: boolean;
     toneMapping: ToneMappingValue;
     exposure: number;
@@ -133,15 +144,9 @@ interface ViewerParams {
 
 const DEFAULT_SORT_PARAMS: Pick<
     ViewerParams,
-    | 'sortRadial'
-    | 'sortMinDuration'
-    | 'sortSplatDistance'
-    | 'sortSplatCoorient'
-    | 'sortCameraDistance'
-    | 'sortCameraCoorient'
+    'minIntervalMs' | 'sortSplatDistance' | 'sortSplatCoorient' | 'sortCameraDistance' | 'sortCameraCoorient'
 > = {
-    sortRadial: true,
-    sortMinDuration: 0,
+    minIntervalMs: 0,
     sortSplatDistance: 0.1,
     sortSplatCoorient: 0.99999,
     sortCameraDistance: 1,
@@ -150,7 +155,7 @@ const DEFAULT_SORT_PARAMS: Pick<
 
 const EXTREME_PERFORMANCE_SORT_PARAMS: typeof DEFAULT_SORT_PARAMS = {
     ...DEFAULT_SORT_PARAMS,
-    sortMinDuration: 160,
+    minIntervalMs: 160,
     sortSplatCoorient: 0.999999,
 };
 
@@ -166,7 +171,9 @@ const VIEWER_SPLATTING_PRESETS: Record<SplattingPresetId, { params: Partial<View
             maxStdDev: 8,
             packHighPrecisionEnabled: true,
             precalculateEnabled: true,
-            repackEnabled: false,
+            cameraRelativeEnabled: false,
+            sortedLayoutEnabled: false,
+            autoFreeResourceOnGpuPacked: true,
             renderAttachHighPrecisionEnabled: true,
             normalizedFalloff: true,
             preBlurAmount: 0.3,
@@ -174,6 +181,7 @@ const VIEWER_SPLATTING_PRESETS: Record<SplattingPresetId, { params: Partial<View
             focalAdjustment: 2,
             detailCullingThreshold: 0,
             maxPixelRadius: 1024,
+            sortHighPrecisionEnabled: true,
         },
     },
     qualityFirst: {
@@ -184,7 +192,9 @@ const VIEWER_SPLATTING_PRESETS: Record<SplattingPresetId, { params: Partial<View
             maxStdDev: 8,
             packHighPrecisionEnabled: true,
             precalculateEnabled: true,
-            repackEnabled: false,
+            cameraRelativeEnabled: false,
+            sortedLayoutEnabled: false,
+            autoFreeResourceOnGpuPacked: true,
             renderAttachHighPrecisionEnabled: false,
             normalizedFalloff: false,
             preBlurAmount: 0.3,
@@ -192,6 +202,28 @@ const VIEWER_SPLATTING_PRESETS: Record<SplattingPresetId, { params: Partial<View
             focalAdjustment: 2,
             detailCullingThreshold: 1,
             maxPixelRadius: 1024,
+            sortHighPrecisionEnabled: false,
+        },
+    },
+    balanced: {
+        params: {
+            ...DEFAULT_SORT_PARAMS,
+            splatPackType: SplatPackType.SuperCompressed,
+            maxSh: 3,
+            maxStdDev: 8,
+            packHighPrecisionEnabled: false,
+            precalculateEnabled: true,
+            cameraRelativeEnabled: true,
+            sortedLayoutEnabled: false,
+            autoFreeResourceOnGpuPacked: false,
+            renderAttachHighPrecisionEnabled: false,
+            normalizedFalloff: false,
+            preBlurAmount: 0.3,
+            blurAmount: 0,
+            focalAdjustment: 2,
+            detailCullingThreshold: 1,
+            maxPixelRadius: 1024,
+            sortHighPrecisionEnabled: false,
         },
     },
     performanceFirst: {
@@ -202,7 +234,9 @@ const VIEWER_SPLATTING_PRESETS: Record<SplattingPresetId, { params: Partial<View
             maxStdDev: 5,
             packHighPrecisionEnabled: false,
             precalculateEnabled: true,
-            repackEnabled: false,
+            cameraRelativeEnabled: false,
+            sortedLayoutEnabled: false,
+            autoFreeResourceOnGpuPacked: true,
             renderAttachHighPrecisionEnabled: false,
             normalizedFalloff: false,
             preBlurAmount: 0.3,
@@ -210,17 +244,20 @@ const VIEWER_SPLATTING_PRESETS: Record<SplattingPresetId, { params: Partial<View
             focalAdjustment: 2,
             detailCullingThreshold: 1,
             maxPixelRadius: 1024,
+            sortHighPrecisionEnabled: false,
         },
     },
-    extremePerformance: {
+    extremePerformance0: {
         params: {
             ...EXTREME_PERFORMANCE_SORT_PARAMS,
             splatPackType: SplatPackType.SuperCompressed,
-            maxSh: 3,
+            maxSh: 0,
             maxStdDev: 5,
             packHighPrecisionEnabled: false,
-            precalculateEnabled: true,
-            repackEnabled: true,
+            precalculateEnabled: false,
+            cameraRelativeEnabled: false,
+            sortedLayoutEnabled: true,
+            autoFreeResourceOnGpuPacked: true,
             renderAttachHighPrecisionEnabled: false,
             normalizedFalloff: false,
             preBlurAmount: 0.3,
@@ -228,6 +265,28 @@ const VIEWER_SPLATTING_PRESETS: Record<SplattingPresetId, { params: Partial<View
             focalAdjustment: 2,
             detailCullingThreshold: 4,
             maxPixelRadius: 1024,
+            sortHighPrecisionEnabled: false,
+        },
+    },
+    extremePerformance1: {
+        params: {
+            ...EXTREME_PERFORMANCE_SORT_PARAMS,
+            splatPackType: SplatPackType.Sog,
+            maxSh: 0,
+            maxStdDev: 5,
+            packHighPrecisionEnabled: false,
+            precalculateEnabled: false,
+            cameraRelativeEnabled: false,
+            sortedLayoutEnabled: true,
+            autoFreeResourceOnGpuPacked: true,
+            renderAttachHighPrecisionEnabled: false,
+            normalizedFalloff: false,
+            preBlurAmount: 0.3,
+            blurAmount: 0,
+            focalAdjustment: 2,
+            detailCullingThreshold: 4,
+            maxPixelRadius: 1024,
+            sortHighPrecisionEnabled: false,
         },
     },
 };
@@ -523,6 +582,7 @@ export async function mountViewerPage(root: HTMLElement, config: ViewerPageConfi
         const data = await parseSourceData(source, type, signal);
         applyImportedSplatDefaults(data);
         const splat = await abortable(createSplat(data), signal);
+        splat.autoFreeResourceOnGpuPacked = params.autoFreeResourceOnGpuPacked;
         scene.add(splat as Object3D);
     }
 
@@ -784,14 +844,16 @@ export async function mountViewerPage(root: HTMLElement, config: ViewerPageConfi
 
 function createDefaultParams(): ViewerParams {
     return {
-        splattingPreset: 'performanceFirst',
+        splattingPreset: 'balanced',
         pixelRatio: 1,
         splatPackType: SplatPackType.SuperCompressed,
         maxSh: 3,
-        maxStdDev: 5,
+        maxStdDev: 8,
         packHighPrecisionEnabled: false,
         precalculateEnabled: true,
-        repackEnabled: false,
+        cameraRelativeEnabled: true,
+        sortedLayoutEnabled: false,
+        autoFreeResourceOnGpuPacked: false,
         renderAttachHighPrecisionEnabled: false,
         normalizedFalloff: false,
         preBlurAmount: 0.3,
@@ -799,12 +861,12 @@ function createDefaultParams(): ViewerParams {
         focalAdjustment: 2,
         detailCullingThreshold: 1,
         maxPixelRadius: 1024,
-        sortRadial: true,
-        sortMinDuration: 0,
+        minIntervalMs: 0,
         sortSplatDistance: 0.1,
         sortSplatCoorient: 0.99999,
         sortCameraDistance: 1,
         sortCameraCoorient: 0.99,
+        sortHighPrecisionEnabled: false,
         toneMappingEnabled: false,
         toneMapping: ToneMapping.Linear,
         exposure: 1,
@@ -844,8 +906,10 @@ function createSplattingPresetOptions(labels: ViewerLabels) {
         [labels.presetCustom]: 'custom',
         [labels.presetMaxQuality]: 'maxQuality',
         [labels.presetQualityFirst]: 'qualityFirst',
+        [labels.presetBalanced]: 'balanced',
         [labels.presetPerformanceFirst]: 'performanceFirst',
-        [labels.presetExtremePerformance]: 'extremePerformance',
+        [labels.presetExtremePerformance0]: 'extremePerformance0',
+        [labels.presetExtremePerformance1]: 'extremePerformance1',
     } satisfies Record<string, SplattingPresetId>;
 }
 
@@ -903,8 +967,13 @@ function setupConfigPanel(
         onChange();
     };
 
-    const splatting = pane.addFolder({ title: 'Splatting', expanded: false });
-    const packTypeBinding = splatting
+    const importOptions = pane.addFolder({ title: `Import · ${labels.packTypeTip}`, expanded: false });
+    const pack = pane.addFolder({ title: 'Pack', expanded: false });
+    const raster = pane.addFolder({ title: 'Raster', expanded: false });
+    const sort = pane.addFolder({ title: 'Sort', expanded: false });
+    const composite = pane.addFolder({ title: 'Composite', expanded: false });
+
+    importOptions
         .addBinding(params, 'splatPackType', {
             label: 'Pack type',
             options: {
@@ -914,45 +983,47 @@ function setupConfigPanel(
             },
         })
         .on('change', markCustomPreset);
-    addViewerConfigTip(packTypeBinding, labels.packTypeTip);
-    splatting
-        .addBinding(params, 'packHighPrecisionEnabled', { label: 'High precision pack' })
-        .on('change', handleSplattingParamChange);
-    splatting
-        .addBinding(params, 'precalculateEnabled', { label: 'Precalculate SH' })
-        .on('change', handleSplattingParamChange);
-    splatting.addBinding(params, 'repackEnabled', { label: 'Repack' }).on('change', handleSplattingParamChange);
-    splatting
-        .addBinding(params, 'renderAttachHighPrecisionEnabled', { label: 'High precision attach' })
-        .on('change', handleSplattingParamChange);
-    splatting
+    importOptions
         .addBinding(params, 'maxSh', { label: 'Max SH', min: 0, max: 3, step: 1 })
         .on('change', handleSplattingParamChange);
-    splatting
+    importOptions
+        .addBinding(params, 'autoFreeResourceOnGpuPacked', { label: 'Auto free packed data' })
+        .on('change', handleSplattingParamChange);
+    pack.addBinding(params, 'packHighPrecisionEnabled', { label: 'High precision' }).on(
+        'change',
+        handleSplattingParamChange,
+    );
+    pack.addBinding(params, 'precalculateEnabled', { label: 'Precalculate SH' }).on(
+        'change',
+        handleSplattingParamChange,
+    );
+    pack.addBinding(params, 'cameraRelativeEnabled', { label: 'Camera relative' }).on(
+        'change',
+        handleSplattingParamChange,
+    );
+    pack.addBinding(params, 'sortedLayoutEnabled', { label: 'Sorted layout' }).on('change', handleSplattingParamChange);
+    raster
         .addBinding(params, 'normalizedFalloff', { label: 'Normalized falloff' })
         .on('change', handleSplattingParamChange);
-    splatting
+    raster
         .addBinding(params, 'preBlurAmount', { label: 'Pre blur', min: 0, max: 1, step: 0.1 })
         .on('change', handleSplattingParamChange);
-    splatting
+    raster
         .addBinding(params, 'blurAmount', { label: 'Blur', min: 0, max: 1, step: 0.1 })
         .on('change', handleSplattingParamChange);
-    splatting
+    raster
         .addBinding(params, 'focalAdjustment', { label: 'Focal adjustment', min: 0.5, max: 2, step: 0.1 })
         .on('change', handleSplattingParamChange);
-    splatting
+    raster
         .addBinding(params, 'detailCullingThreshold', { label: 'Detail culling', min: 0, max: 8, step: 1 })
         .on('change', handleSplattingParamChange);
-    splatting
+    raster
         .addBinding(params, 'maxPixelRadius', { label: 'Max pixel radius', min: 1, max: 1024, step: 1 })
         .on('change', handleSplattingParamChange);
-    splatting
+    raster
         .addBinding(params, 'maxStdDev', { label: 'Max std dev', min: 5, max: 8, step: 1 })
         .on('change', handleSplattingParamChange);
-
-    const sort = pane.addFolder({ title: 'Sort', expanded: false });
-    sort.addBinding(params, 'sortRadial', { label: 'Radial' }).on('change', handleSplattingParamChange);
-    sort.addBinding(params, 'sortMinDuration', { label: 'Min duration', min: 0, max: 160, step: 16 }).on(
+    sort.addBinding(params, 'minIntervalMs', { label: 'Min duration', min: 0, max: 160, step: 16 }).on(
         'change',
         handleSplattingParamChange,
     );
@@ -972,6 +1043,13 @@ function setupConfigPanel(
         'change',
         handleSplattingParamChange,
     );
+    sort.addBinding(params, 'sortHighPrecisionEnabled', { label: 'High precision' }).on(
+        'change',
+        handleSplattingParamChange,
+    );
+    composite
+        .addBinding(params, 'renderAttachHighPrecisionEnabled', { label: 'High precision attach' })
+        .on('change', handleSplattingParamChange);
 
     const toneMapping = pane.addFolder({ title: 'Tone Mapping', expanded: false });
     toneMapping.addBinding(params, 'toneMappingEnabled', { label: 'Enabled' }).on('change', onChange);
@@ -1064,19 +1142,24 @@ function applyViewerConfig(viewer: Viewer, params: ViewerParams) {
             },
             Splatting: {
                 enabled: true,
-                packHighPrecisionEnabled: params.packHighPrecisionEnabled,
-                precalculateEnabled: params.precalculateEnabled,
-                repackEnabled: params.repackEnabled,
-                normalizedFalloff: params.normalizedFalloff,
-                preBlurAmount: params.preBlurAmount,
-                blurAmount: params.blurAmount,
-                focalAdjustment: params.focalAdjustment,
-                detailCullingThreshold: params.detailCullingThreshold,
-                maxPixelRadius: params.maxPixelRadius,
-                maxStdDev: globalThis.Math.sqrt(params.maxStdDev),
+                pack: {
+                    highPrecisionEnabled: params.packHighPrecisionEnabled,
+                    precalculateEnabled: params.precalculateEnabled,
+                    cameraRelativeEnabled: params.cameraRelativeEnabled,
+                    sortedLayoutEnabled: params.sortedLayoutEnabled,
+                },
+                raster: {
+                    normalizedFalloff: params.normalizedFalloff,
+                    preBlurAmount: params.preBlurAmount,
+                    blurAmount: params.blurAmount,
+                    focalAdjustment: params.focalAdjustment,
+                    detailCullingThreshold: params.detailCullingThreshold,
+                    maxPixelRadius: params.maxPixelRadius,
+                    maxStdDev: globalThis.Math.sqrt(params.maxStdDev),
+                },
                 sort: {
-                    sortRadial: params.sortRadial,
-                    sortMinDuration: params.sortMinDuration,
+                    highPrecisionEnabled: params.sortHighPrecisionEnabled,
+                    minIntervalMs: params.minIntervalMs,
                     sortSplatDistance: params.sortSplatDistance,
                     sortSplatCoorient: params.sortSplatCoorient,
                     sortCameraDistance: params.sortCameraDistance,
@@ -1084,7 +1167,7 @@ function applyViewerConfig(viewer: Viewer, params: ViewerParams) {
                 },
                 composite: {
                     enabled: params.renderAttachHighPrecisionEnabled,
-                    highPrecisionAttachEnabled: params.renderAttachHighPrecisionEnabled,
+                    highPrecisionEnabled: params.renderAttachHighPrecisionEnabled,
                 },
                 toneMapping: {
                     enabled: params.toneMappingEnabled,

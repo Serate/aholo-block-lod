@@ -1,7 +1,15 @@
-import { createViewerContext, setViewerConfig, SplatLoader, SplatUtils, ToneMapping } from '@manycore/aholo-viewer';
+import {
+    createViewerContext,
+    setViewerConfig,
+    SplatLoader,
+    SplatUtils,
+    ToneMapping,
+    type Viewer,
+} from '@manycore/aholo-viewer';
 import type { RenderRuntime, RuntimeConfigPanel, RuntimeIndexedDBStorage } from '../../client/render-runtime';
 
 const LodConfig: Omit<SplatUtils.LodConfig, 'debuggerEnabled' | 'debuggerType' | 'distanceStep'> & {
+    highPrecisionEnabled: boolean;
     maxBudgetMillions: number;
 } = {
     minLevel: 0,
@@ -15,6 +23,7 @@ const LodConfig: Omit<SplatUtils.LodConfig, 'debuggerEnabled' | 'debuggerType' |
     schedulerParallelCounts: 4,
     schedulerExistingTaskLimit: 64,
     schedulerMinDuration: 160,
+    highPrecisionEnabled: false,
     maxBudgetMillions: 8,
 };
 
@@ -24,8 +33,9 @@ export default async function runner({ renderer, control, loading, configPanel, 
         pipeline: {
             Splatting: {
                 enabled: true,
-                packHighPrecisionEnabled: true,
-                precalculateEnabled: false,
+                pack: {
+                    precalculateEnabled: false,
+                },
                 toneMapping: {
                     enabled: true,
                     toneMapping: ToneMapping.Neutral,
@@ -79,7 +89,7 @@ export default async function runner({ renderer, control, loading, configPanel, 
         throwIfAborted(signal);
     }
 
-    initConfigPanel(splat, configPanel);
+    initConfigPanel(splat, configPanel, viewer);
 
     renderer.frame(({ delta }) => {
         const updated = control.update(delta);
@@ -90,14 +100,38 @@ export default async function runner({ renderer, control, loading, configPanel, 
     return () => splat.destroy();
 }
 
-function initConfigPanel(splat: SplatUtils.LodSplat, configPanel: RuntimeConfigPanel) {
+function initConfigPanel(splat: SplatUtils.LodSplat, configPanel: RuntimeConfigPanel, viewer: Viewer) {
     const applyConfig = () => {
+        if (LodConfig.highPrecisionEnabled) {
+            setViewerConfig(viewer, {
+                pipeline: {
+                    Splatting: {
+                        pack: {
+                            highPrecisionEnabled: true,
+                            cameraRelativeEnabled: false,
+                        },
+                    },
+                },
+            });
+        } else {
+            setViewerConfig(viewer, {
+                pipeline: {
+                    Splatting: {
+                        pack: {
+                            highPrecisionEnabled: false,
+                            cameraRelativeEnabled: true,
+                        },
+                    },
+                },
+            });
+        }
         LodConfig.maxBudget = LodConfig.maxBudgetMillions * 1_000_000;
         splat.setConfig(LodConfig);
     };
     applyConfig();
 
     const panel = configPanel.createPane({ title: 'Splatting LOD Stream' });
+    panel.addBinding(LodConfig, 'highPrecisionEnabled', { label: 'High precision' }).on('change', applyConfig);
     const budget = panel.addFolder({ title: 'LOD Budget', expanded: true });
     budget
         .addBinding(LodConfig, 'minLevel', {

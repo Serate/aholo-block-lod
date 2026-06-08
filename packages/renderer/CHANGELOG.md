@@ -1,10 +1,15 @@
 # ChangeLOG
 
-## DEV
+## 1.4.0
 
 1. Features
     - add `texture-loader`, now `downloadTexture` is a generic texture load
         - supported types: image types(png, jpg, webp, etc...), ktx2 and dds
+    - add grouped `Splatting` config: `pack`, `raster`, `sort`, and `composite`.
+    - add high-precision and camera-relative splat packing, plus high-precision sorting.
+    - `combineSplatData` target `SplatData` support.
+2. Changes
+    - adjust splat-related default parameters from the underlying renderer pipeline.
 
 ## 1.3.0
 

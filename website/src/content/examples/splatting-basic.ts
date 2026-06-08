@@ -60,12 +60,16 @@ function initConfigPanel(viewer: Viewer, configPanel: RuntimeConfigPanel) {
         setViewerConfig(viewer, {
             pipeline: {
                 Splatting: {
-                    precalculateEnabled: params.precalculateEnabled,
-                    normalizedFalloff: params.normalizedFalloff,
-                    preBlurAmount: params.preBlurAmount,
-                    blurAmount: params.blurAmount,
-                    focalAdjustment: params.focalAdjustment,
-                    detailCullingThreshold: params.detailCullingThreshold,
+                    pack: {
+                        precalculateEnabled: params.precalculateEnabled,
+                    },
+                    raster: {
+                        normalizedFalloff: params.normalizedFalloff,
+                        preBlurAmount: params.preBlurAmount,
+                        blurAmount: params.blurAmount,
+                        focalAdjustment: params.focalAdjustment,
+                        detailCullingThreshold: params.detailCullingThreshold,
+                    },
                     toneMapping: {
                         enabled: params.toneMappingEnabled,
                         toneMapping: params.toneMapping,
