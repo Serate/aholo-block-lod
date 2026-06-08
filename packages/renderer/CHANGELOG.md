@@ -1,5 +1,10 @@
 # ChangeLOG
 
+## 1.4.1
+
+1. Fixes
+    - fix `packCameraRelativeCenterIsDirty` being incorrectly evaluated as `true` when camera-relative center packing is disabled.
+
 ## 1.4.0
 
 1. Features
