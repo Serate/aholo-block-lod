@@ -16,7 +16,7 @@ const renderSessionRendererOptions = z
         antialiasing: false,
     });
 
-const exampleSurface = z.enum(['examples', 'playground', 'home', 'none']);
+const exampleSurface = z.enum(['examples', 'playground', 'home']);
 const exampleSurfaces = z
     .array(exampleSurface)
     .min(1)
