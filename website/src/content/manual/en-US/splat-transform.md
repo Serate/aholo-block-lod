@@ -13,7 +13,7 @@ order: 5
 - Node.js >= 22.22.1
 - Windows: Windows 22H2+ x86_64 with a D3D12 or Vulkan-compatible GPU. A discrete GPU is recommended when GPU features are enabled.
 - Linux: x86_64, glibc >= 2.34, libstdc++ >= 3.4.30, and a Vulkan-compatible GPU. A discrete GPU is recommended when GPU features are enabled.
-- macOS: not supported.
+- macOS: apple silicon ARM64 only.
 
 ### GPU-Required Features
 

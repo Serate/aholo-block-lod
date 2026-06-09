@@ -1,5 +1,9 @@
 # ChangeLOG
 
+## 1.2.10
+
+- 增加`darwin-arm64`的预编译版本
+
 ## 1.2.9
 
 - 改进编码风格开启`verbatimModuleSyntax` & `isolatedModules`，迁移至`OXC`

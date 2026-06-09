@@ -1,5 +1,5 @@
 {
-  "name": "@manycore/aholo-splat-transform-linux-x64-gnu",
+  "name": "@manycore/aholo-splat-transform-darwin-arm64",
   "version": "1.2.10",
   "type": "commonjs",
   "main": "binding.node",
@@ -7,12 +7,9 @@
     "binding.node"
   ],
   "os": [
-    "linux"
+    "darwin"
   ],
   "cpu": [
-    "x64"
-  ],
-  "libc": [
-    "glibc"
+    "arm64"
   ]
 }
