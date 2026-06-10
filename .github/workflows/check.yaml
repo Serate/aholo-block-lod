@@ -20,5 +20,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-      - run: chmod a+x ./ci/check.sh
-      - run: ./ci/check.sh
+      - run: |
+          chmod a+x ./ci/check.sh
+          ./ci/check.sh
