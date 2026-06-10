@@ -24,7 +24,7 @@ npm install --save-dev vite typescript # TypeScript is recommended.
             <title>My first aholo viewer app</title>
         </head>
         <body>
-            <script type="module" src="./index.js"></script>
+            <script type="module" src="./index.ts"></script>
         </body>
     </html>
     ```
