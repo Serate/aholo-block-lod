@@ -1,1 +1,1 @@
-export declare function isMusl(): boolean;
+export declare function getNativePackageName(): string;

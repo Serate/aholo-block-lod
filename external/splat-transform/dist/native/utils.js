@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import child_process from 'node:child_process';
-export function isMusl() {
+import p from '../../package.json' with { type: 'json' };
+function isMusl() {
     let musl = false;
     if (process.platform === 'linux') {
         musl = isMuslFromFilesystem();
@@ -51,4 +52,14 @@ function isMuslFromChildProcess() {
         // If we reach this case, we don't know if the system is musl or not, so is better to just fallback to false
         return false;
     }
+}
+export function getNativePackageName() {
+    let runtime = undefined;
+    if (process.platform === 'win32') {
+        runtime = 'msvc';
+    }
+    else if (process.platform === 'linux') {
+        runtime = isMusl() ? 'musl' : 'gnu';
+    }
+    return `${p.name}-${process.platform}-${process.arch}${runtime ? `-${runtime}` : ''}`;
 }

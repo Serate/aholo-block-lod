@@ -2,9 +2,8 @@
   "name": "@manycore/aholo-splat-transform-linux-x64-gnu",
   "version": "1.2.10",
   "type": "commonjs",
-  "main": "binding.node",
   "files": [
-    "binding.node"
+    "splat-transform.node"
   ],
   "os": [
     "linux"

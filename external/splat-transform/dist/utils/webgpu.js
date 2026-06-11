@@ -1,11 +1,12 @@
 /// <reference types="@webgpu/types" />
 import { createRequire } from 'node:module';
 import { logger } from './index.js';
+import { getNativePackageName } from '../native/utils.js';
 const getModule = (function () {
     let m = undefined;
     return function () {
         if (!m) {
-            m = createRequire(import.meta.url)('webgpu');
+            m = createRequire(import.meta.url)(getNativePackageName() + '/dawn.node');
             Object.assign(globalThis, m.globals);
         }
         return m;

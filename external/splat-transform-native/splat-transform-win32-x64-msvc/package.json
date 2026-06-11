@@ -2,9 +2,12 @@
   "name": "@manycore/aholo-splat-transform-win32-x64-msvc",
   "version": "1.2.10",
   "type": "commonjs",
-  "main": "binding.node",
   "files": [
-    "binding.node"
+    "splat-transform.node",
+    "dawn.node",
+    "d3dcompiler_47.dll",
+    "dxcompiler.dll",
+    "dxil.dll"
   ],
   "os": [
     "win32"

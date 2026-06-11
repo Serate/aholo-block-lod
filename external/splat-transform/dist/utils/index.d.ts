@@ -15,7 +15,7 @@ export * from './StreamChunkDecoder.js';
 export * from './math.js';
 export * from './sh-rotate.js';
 export * from './splat.js';
-export * from './k-means.js';
+export * from './k-means/index.js';
 export * from './quantize-1d.js';
 export * from './webgpu.js';
 export * from './voxel/common.js';

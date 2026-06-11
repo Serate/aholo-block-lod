@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer';
 import { decodeWebP, encodeWebP, WebPLosslessProfile } from '../native/index.js';
 import { ColIdx } from '../SplatData.js';
 import { SH_C0, SH_MAPS, NUM_F_REST_TO_SH_DEGREE } from '../constant.js';
-import { getOrCreateDevice, kmeans, logger, mortonSort, quantize1d, isUrl, extractFromRootDir, clamp, } from '../utils/index.js';
+import { getOrCreateDevice, kMeans, logger, mortonSort, quantize1d, isUrl, extractFromRootDir, clamp, } from '../utils/index.js';
 const ZIP_MAGIC = 0x04034b50;
 const PERM_TABLE = [
     // original quat idx ---> actual storage idx
@@ -485,7 +485,7 @@ export class SogFile {
             const device = await getOrCreateDevice();
             logger.info(`SOG SH${shDegree} k-means with clusters=${paletteSize} iterations=${this.iterations}`);
             logger.time(`SOG SH${shDegree} k-means`);
-            const { centroids, labels } = await kmeans(shDataTable, paletteSize, this.iterations, device);
+            const { centroids, labels } = await kMeans(shDataTable, paletteSize, this.iterations, device);
             logger.timeEnd(`SOG SH${shDegree} k-means`);
             const codebook = quantize1d(centroids);
             // write centroids

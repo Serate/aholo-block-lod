@@ -1,22 +1,14 @@
 import { createRequire } from 'node:module';
 import { SplatData } from '../SplatData.js';
 import { Buffer } from 'node:buffer';
-import { isMusl } from './utils.js';
-import p from '../../package.json' with { type: 'json' };
+import { getNativePackageName } from './utils.js';
 const getModule = (function () {
     let m = undefined;
     const require = createRequire(import.meta.url);
-    let runtime = undefined;
-    if (process.platform === 'win32') {
-        runtime = 'msvc';
-    }
-    else if (process.platform === 'linux') {
-        runtime = isMusl() ? 'musl' : 'gnu';
-    }
-    const binaryPackage = `${p.name}-${process.platform}-${process.arch}${runtime ? `-${runtime}` : ''}`;
+    const binaryModule = getNativePackageName() + '/splat-transform.node';
     return function () {
         if (!m) {
-            m = require(binaryPackage);
+            m = require(binaryModule);
         }
         return m;
     };
