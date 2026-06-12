@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Use Aholo Viewer'
+  short_description: 'Guide AI agents to integrate @manycore/aholo-viewer'
+  default_prompt: 'Use $use-aholo-viewer to build a Vite integration with @manycore/aholo-viewer.'

@@ -30,7 +30,7 @@ export default async function runner({ renderer, control, loading, signal }: Ren
     const floorMaterial = new MeshPhongMaterial({
         specular: 0xffffff,
         shininess: 500,
-        texture: floorTexture as never,
+        texture: floorTexture,
     });
 
     const floor = new Mesh(floorGeometry, floorMaterial);

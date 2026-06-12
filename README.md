@@ -18,7 +18,11 @@ Aholo Viewer is a high performance Renderer for 3DGS and Mesh. It uses `Chunked 
 
 Follow the [Manual](https://aholojs.dev/en-US/manual/getting-started/).
 
-If everything goes well you will see [this](https://jsfiddle.net/u78hL5ta/)
+> If everything goes well you will see [this](https://jsfiddle.net/u78hL5ta/)
+
+For npm package usage, see [`packages/renderer/README.md`](./packages/renderer/README.md).
+
+For AI-assisted integration, use [`docs/ai/skills/use-aholo-viewer/SKILL.md`](./docs/ai/skills/use-aholo-viewer/SKILL.md).
 
 ## Build Requirements
 
@@ -74,6 +78,7 @@ pnpm docs:api
 - `AGENTS.md`: quick guide for AI agents and future coding sessions
 - `docs/architecture.md`: current workspace structure and dependency flow
 - `docs/ai/vibe-coding-guide.md`: detailed guide for future AI-assisted changes, writing style, and handoffs
+- `docs/ai/skills/use-aholo-viewer/SKILL.md`: external npm package usage guide for AI coding agents
 - `.codex/skills/`: local Codex skills split by repo area
 
 ## Codex Skills
