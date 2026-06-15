@@ -109,6 +109,6 @@ export function decodeAVIF(data) {
 export function decodeAVIFBatched(inputs) {
     return getModule().avif_decode_rgba_batched(inputs.map(i => (i instanceof Buffer ? i : Buffer.from(i.buffer, i.byteOffset, i.byteLength))));
 }
-export function clusterAverage(dataTable, clusters, output) {
-    return getModule().cluster_average(dataTable.map(t => Buffer.from(t.buffer, t.byteOffset, t.byteLength)), clusters.map(t => Buffer.from(t.buffer, t.byteOffset, t.byteLength)), output.map(t => Buffer.from(t.buffer, t.byteOffset, t.byteLength)));
+export function clusterAverage(dataTable, labels, k, output) {
+    return getModule().cluster_average(dataTable.map(t => Buffer.from(t.buffer, t.byteOffset, t.byteLength)), Buffer.from(labels.buffer, labels.byteOffset, labels.byteLength), k, output.map(t => Buffer.from(t.buffer, t.byteOffset, t.byteLength)));
 }

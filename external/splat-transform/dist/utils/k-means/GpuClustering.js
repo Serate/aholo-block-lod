@@ -1,7 +1,7 @@
 import { logger } from '../index.js';
 const chunkSize = 128;
-const workgroupSize = 64;
-function clusterWgsl(numColumns) {
+const workgroupSize = 128;
+function clusterWgsl(vecColumns) {
     return /* wgsl */ `
 struct Uniforms {
     numPoints: u32,
@@ -9,24 +9,26 @@ struct Uniforms {
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
-@group(0) @binding(1) var<storage, read> points: array<f32>;
-@group(0) @binding(2) var<storage, read> centroids: array<f32>;
-@group(0) @binding(3) var<storage, read_write> results: array<u32>;
+@group(0) @binding(1) var<storage, read> points: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read> centroids: array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read> centroidSq: array<f32>;
+@group(0) @binding(4) var<storage, read_write> results: array<u32>;
 
-const numColumns = ${numColumns};   // number of columns in the points and centroids tables
-const chunkSize = ${chunkSize}u;             // must be a multiple of 64
+const vecColumns = ${vecColumns}u;
+const chunkSize = ${chunkSize}u;
 const workgroupSize = ${workgroupSize}u;
-var<workgroup> sharedChunk: array<f32, numColumns * chunkSize>;
+var<workgroup> sharedChunk: array<vec4<f32>, vecColumns * chunkSize>;
+var<workgroup> sharedSq: array<f32, chunkSize>;
 
-// calculate the squared distance between the point and centroid
-fn calcDistanceSqr(point: array<f32, numColumns>, centroid: u32) -> f32 {
-    var result = 0.0;
+fn calcDistance(point: array<vec4<f32>, vecColumns>, centroid: u32) -> f32 {
+    let ci = centroid * vecColumns;
+    var result = sharedSq[centroid];
 
-    var ci = centroid * numColumns;
-
-    for (var i = 0u; i < numColumns; i++) {
-        let v = f32(point[i] - sharedChunk[ci+i]);
-        result += v * v;
+    for (var i = 0u; i < vecColumns; i++) {
+        // euclid distance simplify
+        // (centroid - point) ^ 2 = centroid ^ 2 - 2 * dot(centroid, point) + point ^ 2
+        // point ^ 2 omitted, for same point find nearest centroid is not necessary
+        result -= 2.0 * dot(point[i], sharedChunk[ci + i]);
     }
 
     return result;
@@ -34,48 +36,42 @@ fn calcDistanceSqr(point: array<f32, numColumns>, centroid: u32) -> f32 {
 
 @compute @workgroup_size(workgroupSize)
 fn main(
-    @builtin(local_invocation_index) local_id : u32,
-    @builtin(global_invocation_id) global_id: vec3u,
-    @builtin(num_workgroups) num_workgroups: vec3u
+    @builtin(local_invocation_index) localId : u32,
+    @builtin(global_invocation_id) globalId: vec3u,
+    @builtin(num_workgroups) numWorkgroups: vec3u
 ) {
-    // calculate row index for this thread point
-    let pointIndex = global_id.x + global_id.y * num_workgroups.x * workgroupSize;
+    let pointIndex = globalId.x + globalId.y * numWorkgroups.x * workgroupSize;
 
-    // copy the point data from global memory
-    var point: array<f32, numColumns>;
+    var point: array<vec4<f32>, vecColumns>;
     if (pointIndex < uniforms.numPoints) {
-        for (var i = 0u; i < numColumns; i++) {
-            point[i] = points[pointIndex * numColumns + i];
+        for (var i = 0u; i < vecColumns; i++) {
+            point[i] = points[pointIndex * vecColumns + i];
         }
     }
 
     var mind = 1000000.0;
     var mini = 0u;
 
-    // work through the list of centroids in shared memory chunks
     let numChunks = u32(ceil(f32(uniforms.numCentroids) / f32(chunkSize)));
     for (var i = 0u; i < numChunks; i++) {
+        let chunkToLoad = min(chunkSize, uniforms.numCentroids - i * chunkSize);
+        for (var row = localId; row < chunkToLoad; row += workgroupSize) {
+            let srcRow = i * chunkSize + row;
+            let dst = row * vecColumns;
+            let src = srcRow * vecColumns;
 
-        // copy this thread's slice of the centroid shared chunk data
-        let dstRow = local_id * (chunkSize / workgroupSize);
-        let srcRow = min(uniforms.numCentroids, i * chunkSize + local_id * chunkSize / workgroupSize);
-        let numRows = min(uniforms.numCentroids, srcRow + chunkSize / workgroupSize) - srcRow;
-
-        var dst = dstRow * numColumns;
-        var src = srcRow * numColumns;
-
-        for (var c = 0u; c < numRows * numColumns; c++) {
-            sharedChunk[dst + c] = centroids[src + c];
+            for (var c = 0u; c < vecColumns; c++) {
+                sharedChunk[dst + c] = centroids[src + c];
+            }
+            sharedSq[row] = centroidSq[srcRow];
         }
 
-        // wait for all threads to finish writing their part of centroids shared memory buffer
         workgroupBarrier();
 
-        // loop over the next chunk of centroids finding the closest
         if (pointIndex < uniforms.numPoints) {
             let thisChunkSize = min(chunkSize, uniforms.numCentroids - i * chunkSize);
             for (var c = 0u; c < thisChunkSize; c++) {
-                let d = calcDistanceSqr(point, c);
+                let d = calcDistance(point, c);
                 if (d < mind) {
                     mind = d;
                     mini = i * chunkSize + c;
@@ -83,7 +79,6 @@ fn main(
             }
         }
 
-        // next loop will overwrite the shared memory, so wait
         workgroupBarrier();
     }
 
@@ -93,12 +88,24 @@ fn main(
 }
 `;
 }
-function interleaveData(result, dataTable, numRows, rowOffset) {
+function packVec4Data(result, dataTable, numRows, rowOffset, vecColumns, norms) {
     const numColumns = dataTable.length;
-    for (let c = 0; c < numColumns; ++c) {
-        const column = dataTable[c];
-        for (let r = 0; r < numRows; ++r) {
-            result[r * numColumns + c] = column[rowOffset + r];
+    const stride = vecColumns * 4;
+    for (let r = 0; r < numRows; r++) {
+        const dst = r * stride;
+        let norm = 0.0;
+        for (let c = 0; c < numColumns; c++) {
+            const v = dataTable[c][rowOffset + r];
+            result[dst + c] = v;
+            if (norms) {
+                norm += v * v;
+            }
+        }
+        for (let c = numColumns; c < stride; c++) {
+            result[dst + c] = 0.0;
+        }
+        if (norms) {
+            norms[r] = norm;
         }
     }
 }
@@ -107,17 +114,20 @@ export default class GpuClustering {
     constructor(device, numPoints, numColumns, numCentroids) {
         this.device = device;
         this.numPoints = numPoints;
-        this.numColumns = numColumns;
         this.numCentroids = numCentroids;
-        const workgroupsPerBatch = Math.min(device.limits.maxComputeWorkgroupsPerDimension, // device dispatch limit
-        Math.floor(device.limits.maxBufferSize / (numColumns * workgroupSize * 4)), // point storage limit
-        Math.ceil(numPoints / workgroupSize));
-        this.batchSize = workgroupsPerBatch * workgroupSize;
+        this.vecColumns = Math.ceil(numColumns / 4);
+        this.workgroupSize = workgroupSize;
+        this.pointStride = this.vecColumns * 4;
+        const storageLimit = Math.min(device.limits.maxBufferSize, device.limits.maxStorageBufferBindingSize);
+        const workgroupsPerBatch = Math.max(1, Math.min(device.limits.maxComputeWorkgroupsPerDimension, // device dispatch limit
+        Math.floor(storageLimit / (this.pointStride * this.workgroupSize * 4)), // point storage limit
+        Math.ceil(numPoints / this.workgroupSize)));
+        this.batchSize = workgroupsPerBatch * this.workgroupSize;
         this.numBatches = Math.ceil(numPoints / this.batchSize);
         this.concurrencyBatches = Math.min(MAX_CONCURRENCY_BATCHES, this.numBatches);
         this.concurrencyRuns = Math.ceil(this.numBatches / this.concurrencyBatches);
         const shader = device.createShaderModule({
-            code: clusterWgsl(numColumns),
+            code: clusterWgsl(this.vecColumns),
         });
         const pipeline = device.createComputePipeline({
             layout: 'auto',
@@ -126,12 +136,17 @@ export default class GpuClustering {
                 entryPoint: 'main',
             },
         });
-        const pointsBackBuffer = new Float32Array(numColumns * this.batchSize);
-        const centroidsBackBuffer = new Float32Array(numColumns * numCentroids);
+        const pointsBackBuffer = new Float32Array(this.pointStride * this.batchSize);
+        const centroidsBackBuffer = new Float32Array(this.pointStride * numCentroids);
+        const centroidSqBackBuffer = new Float32Array(numCentroids);
         const uniformBackBuffer = new Uint32Array([0, numCentroids]);
         const pointsBuffers = [];
         const centroidsBuffer = device.createBuffer({
             size: centroidsBackBuffer.byteLength,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
+        });
+        const centroidSqBuffer = device.createBuffer({
+            size: centroidSqBackBuffer.byteLength,
             usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
         });
         const uniformBuffer = device.createBuffer({
@@ -154,60 +169,70 @@ export default class GpuClustering {
                 usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
             });
             pointsBuffers.push(pointsBuffer);
+            const entries = [
+                {
+                    binding: 0,
+                    resource: {
+                        buffer: uniformBuffer,
+                        offset: i * 256,
+                        size: 8,
+                    },
+                },
+                {
+                    binding: 1,
+                    resource: pointsBuffer,
+                },
+                {
+                    binding: 2,
+                    resource: centroidsBuffer,
+                },
+                {
+                    binding: 3,
+                    resource: centroidSqBuffer,
+                },
+                {
+                    binding: 4,
+                    resource: {
+                        buffer: resultBuffer,
+                        offset: i * this.batchSize * 4,
+                        size: this.batchSize * 4,
+                    },
+                },
+            ];
             bindGroups.push(device.createBindGroup({
                 layout,
-                entries: [
-                    {
-                        binding: 0,
-                        resource: {
-                            buffer: uniformBuffer,
-                            offset: i * 256,
-                            size: 8,
-                        },
-                    },
-                    {
-                        binding: 1,
-                        resource: pointsBuffer,
-                    },
-                    {
-                        binding: 2,
-                        resource: centroidsBuffer,
-                    },
-                    {
-                        binding: 3,
-                        resource: {
-                            buffer: resultBuffer,
-                            offset: i * this.batchSize * 4,
-                            size: this.batchSize * 4,
-                        },
-                    },
-                ],
+                entries,
             }));
         }
+        const gpuBuffers = {
+            uniform: uniformBuffer,
+            points: pointsBuffers,
+            centroids: centroidsBuffer,
+            centroidSq: centroidSqBuffer,
+            result: resultBuffer,
+            resultReadBack: resultReadBackBuffer,
+        };
+        const backBuffers = {
+            uniform: uniformBackBuffer,
+            points: pointsBackBuffer,
+            centroids: centroidsBackBuffer,
+            centroidSq: centroidSqBackBuffer,
+        };
         this.resource = {
             pipeline,
             bindGroups,
-            gpuBuffers: {
-                uniform: uniformBuffer,
-                points: pointsBuffers,
-                centroids: centroidsBuffer,
-                result: resultBuffer,
-                resultReadBack: resultReadBackBuffer,
-            },
-            backBuffers: {
-                uniform: uniformBackBuffer,
-                points: pointsBackBuffer,
-                centroids: centroidsBackBuffer,
-            },
+            gpuBuffers,
+            backBuffers,
             uploadedBatches: [],
         };
-        logger.info(`GPU k-means kernel bootstrapped with batch ${workgroupsPerBatch}*${workgroupSize}*${this.numBatches}, concurrency: ${this.concurrencyBatches}, runs: ${this.concurrencyRuns}`);
+        logger.info(`GPU k-means kernel bootstrapped with batch ${workgroupsPerBatch}*${this.workgroupSize}*${this.numBatches}, concurrency: ${this.concurrencyBatches}, runs: ${this.concurrencyRuns}`);
     }
     async execute(points, centroids, labels) {
-        const { device, numPoints, numColumns, numCentroids, numBatches, batchSize, resource, concurrencyBatches, concurrencyRuns, } = this;
+        const { device, numPoints, numCentroids, numBatches, batchSize, resource, concurrencyBatches, concurrencyRuns, pointStride, vecColumns, workgroupSize, } = this;
         // upload centroid data to gpu
-        interleaveData(resource.backBuffers.centroids, centroids, numCentroids, 0);
+        packVec4Data(resource.backBuffers.centroids, centroids, numCentroids, 0, vecColumns, resource.backBuffers.centroidSq);
         device.queue.writeBuffer(resource.gpuBuffers.centroids, 0, resource.backBuffers.centroids.buffer);
+        device.queue.writeBuffer(resource.gpuBuffers.centroidSq, 0, resource.backBuffers.centroidSq.buffer);
         for (let i = 0; i < concurrencyRuns; i++) {
             const batchStart = i * concurrencyBatches;
             let resultCount = 0;
@@ -220,8 +245,8 @@ export default class GpuClustering {
                 resultCount += currentBatchSize;
                 // write this batch of point data to gpu
                 if (resource.uploadedBatches[j] !== batchIndex) {
-                    interleaveData(resource.backBuffers.points, points, currentBatchSize, batchIndex * batchSize);
-                    device.queue.writeBuffer(resource.gpuBuffers.points[j], 0, resource.backBuffers.points.buffer, 0, numColumns * currentBatchSize * 4);
+                    packVec4Data(resource.backBuffers.points, points, currentBatchSize, batchIndex * batchSize, vecColumns);
+                    device.queue.writeBuffer(resource.gpuBuffers.points[j], 0, resource.backBuffers.points.buffer, 0, pointStride * currentBatchSize * 4);
                     resource.backBuffers.uniform[0] = currentBatchSize;
                     device.queue.writeBuffer(resource.gpuBuffers.uniform, 256 * j, resource.backBuffers.uniform.buffer, 0, 8);
                     resource.uploadedBatches[j] = batchIndex;
@@ -252,6 +277,7 @@ export default class GpuClustering {
     destroy() {
         this.resource.gpuBuffers.uniform.destroy();
         this.resource.gpuBuffers.centroids.destroy();
+        this.resource.gpuBuffers.centroidSq?.destroy();
         this.resource.gpuBuffers.result.destroy();
         this.resource.gpuBuffers.resultReadBack.destroy();
         for (const buffer of this.resource.gpuBuffers.points) {

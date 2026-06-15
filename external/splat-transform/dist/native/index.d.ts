@@ -51,4 +51,4 @@ export declare function decodeAVIFBatched(inputs: Array<Uint8Array | Buffer>): {
     width: number;
     height: number;
 }[];
-export declare function clusterAverage(dataTable: Float32Array[], clusters: Uint32Array[], output: Float32Array[]): void;
+export declare function clusterAverage(dataTable: Float32Array[], labels: Uint32Array, k: number, output: Float32Array[]): void;

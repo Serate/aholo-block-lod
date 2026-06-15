@@ -1,5 +1,11 @@
 # ChangeLOG
 
+## DEV
+
+- 移除`webgpu`依赖，改为自主编译版本
+- 优化`k-means`计算，采用`vec4`对齐，简化欧几里得距离计算。(性能提升约50%)
+- 优化`clusterAverage`，减少js端overhead
+
 ## 1.2.10
 
 - 增加`darwin-arm64`的预编译版本

@@ -31,16 +31,6 @@ function initializeCentroids(dataTable, centroids) {
         }
     }
 }
-function groupLabels(labels, k) {
-    const clusters = [];
-    for (let i = 0; i < k; ++i) {
-        clusters[i] = [];
-    }
-    for (let i = 0; i < labels.length; ++i) {
-        clusters[labels[i]].push(i);
-    }
-    return clusters.map(c => new Uint32Array(c));
-}
 // https://github.com/playcanvas/splat-transform/blob/main/src/lib/spatial/k-means.ts
 export async function kMeans(points, k, iterations, device) {
     const numRows = points.length > 0 ? points[0].length : 0;
@@ -67,7 +57,7 @@ export async function kMeans(points, k, iterations, device) {
     while (!converged) {
         logger.info(`kmeans iteration ${steps + 1}`);
         await gpuClustering.execute(points, centroids, labels);
-        clusterAverage(points, groupLabels(labels, k), centroids);
+        clusterAverage(points, labels, k, centroids);
         steps++;
         if (steps >= iterations) {
             converged = true;
