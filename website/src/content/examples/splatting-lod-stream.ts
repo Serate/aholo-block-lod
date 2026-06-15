@@ -13,7 +13,7 @@ const LodConfig: Omit<SplatUtils.LodConfig, 'debuggerEnabled' | 'debuggerType' |
     maxBudgetMillions: number;
 } = {
     minLevel: 0,
-    maxBudget: 8000000,
+    maxBudget: 6000000,
     backgroundPenalty: 0.5,
     outsidePenalty: 0.4,
     behindPenalty: 0.1,
@@ -24,7 +24,7 @@ const LodConfig: Omit<SplatUtils.LodConfig, 'debuggerEnabled' | 'debuggerType' |
     schedulerExistingTaskLimit: 64,
     schedulerMinDuration: 160,
     highPrecisionEnabled: false,
-    maxBudgetMillions: 8,
+    maxBudgetMillions: 6,
 };
 
 export default async function runner({ renderer, control, loading, configPanel, indexedDB, signal }: RenderRuntime) {
@@ -44,21 +44,21 @@ export default async function runner({ renderer, control, loading, configPanel, 
         },
     });
     const camera = viewer.getCamera();
-    camera.up.set(0, 0, 1);
-    camera.position.set(3.8955188792160604, 4.78942301156218, 2.547649865689554);
-    camera.rotation.set(-0.6918980151400992, 1.0657382790225007, 2.3288403005504987);
+    camera.up.set(0, -1, 0);
+    camera.position.set(-0.9800918057099783, -1.7506846691679372, 2.292388933466888);
+    camera.rotation.set(0.11785010330530897, -0.030190695395364366, -3.133801078676436);
     control.setOptions({ enabled: true });
 
     loading.show('Streaming initial LOD');
     const envData = await loadResource(
-        'https://holo-cos.aholo3d.cn/aholo-opensource/gs_file/misc/lod-env.24ee228c.sog',
+        'https://holo-cos.aholo3d.cn/aholo-opensource/gs_file/misc/home-interaction-env.73524ff2.sog',
         indexedDB,
     );
     const env = await SplatUtils.createSplat(envData);
     scene.add(env);
 
     const meta = await loadLodMeta(
-        'https://holo-cos.aholo3d.cn/aholo-opensource/gs_file/daqiao/chunk-lod/f013993d/lod-meta.json',
+        'https://holo-cos.aholo3d.cn/aholo-opensource/gs_file/huochezhan/chunk-lod/6b077ba2/lod-meta.json',
         signal,
     );
     throwIfAborted(signal);

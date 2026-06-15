@@ -2,7 +2,7 @@
   "order": 1,
   "tags": ["3dgs", "splatting", "lod", "streaming"],
   "accent": "#38bdf8",
-  "coverImageUrl": "https://holo-cos.aholo3d.cn/aholo-opensource/page/example-cover/splatting-lod-stream.6a6febba.png",
+  "coverImageUrl": "https://holo-cos.aholo3d.cn/aholo-opensource/page/example-cover/splatting-lod-stream.6b6d466a.png",
   "renderer": {
     "antialiasing": false,
     "pixelRatio": 1
