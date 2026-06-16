@@ -13,6 +13,24 @@ const getModule = (function () {
         return m;
     };
 })();
+const [defaultThreadPool, smallThreadPool] = (function () {
+    let defaultTheadPool;
+    let smallTheadPool;
+    return [
+        function () {
+            if (!defaultTheadPool) {
+                defaultTheadPool = new (getModule().ThreadPool)();
+            }
+            return defaultTheadPool;
+        },
+        function () {
+            if (!smallTheadPool) {
+                smallTheadPool = new (getModule().ThreadPool)(4);
+            }
+            return smallTheadPool;
+        },
+    ];
+})();
 export function generateLod(splat, levelParameters, blockPrecision, minSize, maxStep) {
     if (splat.counts === 0) {
         return {
@@ -36,7 +54,7 @@ export function generateLod(splat, levelParameters, blockPrecision, minSize, max
             parameters[i * 2 + 1] = scaleBoost;
         }
     }
-    const { blockBoxes, blockRefs, gaussianCount, data } = getModule().generate_lod(inputBuffers, splat.shCounts, buffer, blockPrecision, minSize, maxStep);
+    const { blockBoxes, blockRefs, gaussianCount, data } = getModule().generate_lod(inputBuffers, splat.shCounts, buffer, blockPrecision, minSize, maxStep, defaultThreadPool());
     const blockView = new Float32Array(blockBoxes.buffer, blockBoxes.byteOffset, blockBoxes.byteLength / 4);
     const blockRefsView = new Uint32Array(blockRefs.buffer, blockRefs.byteOffset, blockRefs.byteLength / 4);
     const blockCount = blockView.length / 6;
@@ -100,15 +118,15 @@ export function encodeAVIFBatched(inputs) {
     return getModule().avif_encode_rgba_batched(inputs.map(i => ({
         ...i,
         data: i.data instanceof Buffer ? i.data : Buffer.from(i.data.buffer, i.data.byteOffset, i.data.byteLength),
-    })));
+    })), smallThreadPool());
 }
 export function decodeAVIF(data) {
     const buffer = data instanceof Buffer ? data : Buffer.from(data.buffer, data.byteOffset, data.byteLength);
     return getModule().avif_decode_rgba(buffer);
 }
 export function decodeAVIFBatched(inputs) {
-    return getModule().avif_decode_rgba_batched(inputs.map(i => (i instanceof Buffer ? i : Buffer.from(i.buffer, i.byteOffset, i.byteLength))));
+    return getModule().avif_decode_rgba_batched(inputs.map(i => (i instanceof Buffer ? i : Buffer.from(i.buffer, i.byteOffset, i.byteLength))), smallThreadPool());
 }
 export function clusterAverage(dataTable, labels, k, output) {
-    return getModule().cluster_average(dataTable.map(t => Buffer.from(t.buffer, t.byteOffset, t.byteLength)), Buffer.from(labels.buffer, labels.byteOffset, labels.byteLength), k, output.map(t => Buffer.from(t.buffer, t.byteOffset, t.byteLength)));
+    return getModule().cluster_average(dataTable.map(t => Buffer.from(t.buffer, t.byteOffset, t.byteLength)), Buffer.from(labels.buffer, labels.byteOffset, labels.byteLength), k, output.map(t => Buffer.from(t.buffer, t.byteOffset, t.byteLength)), defaultThreadPool());
 }
