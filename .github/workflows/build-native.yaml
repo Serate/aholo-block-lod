@@ -57,7 +57,7 @@ jobs:
           chmod a+x ./llvm.sh
           sudo ./llvm.sh 20
           sudo apt-get update
-          sudo apt-get install -y clang-20 clang-tools-20 lld-20 ninja-build pkg-config
+          sudo apt-get install -y clang-20 clang-tools-20 lld-20 ninja-build pkg-config nasm
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-20 20
           sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-20 20
           sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang-20 20
@@ -66,17 +66,18 @@ jobs:
           sudo update-alternatives --set clang++ /usr/bin/clang++-20
           sudo update-alternatives --set cc /usr/bin/clang-20
           sudo update-alternatives --set c++ /usr/bin/clang++-20
-          echo "CC=/usr/bin/clang-20" >> "${GITHUB_ENV}"
-          echo "CXX=/usr/bin/clang++-20" >> "${GITHUB_ENV}"
           cmake --version
           clang-20 --version
+          clang++-20 --version
+          ninja --version
 
       - name: Setup env (macOS)
         if: startsWith(matrix.os, 'macos')
         run: |
-          brew install ninja
+          brew install ninja nasm
           cmake --version
           clang --version
+          ninja --version
 
       - name: Setup vcpkg (Windows)
         if: startsWith(matrix.os, 'windows')
