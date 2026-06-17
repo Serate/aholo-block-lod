@@ -28,5 +28,10 @@ for (const p of packages) {
         // cleanup package.json before publish
         child_process.execSync('npm pkg delete scripts devDependencies', { stdio: 'inherit', cwd });
         child_process.execSync('npm publish --access public', { stdio: 'inherit', cwd });
+        // restore package.json
+        if (hiddenBuildCommand) {
+            delete packageJson.scripts.build;
+        }
+        fs.writeFileSync(path.resolve(cwd, 'package.json'), JSON.stringify(packageJson, undefined, 2), 'utf-8');
     }
 }

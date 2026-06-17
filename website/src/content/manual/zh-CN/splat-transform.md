@@ -12,7 +12,7 @@ order: 5
 
 - Node.js >= 22.22.1
 - Windows: Windows 22H2+，x86_64，D3D12 或 Vulkan 兼容显卡。需要 GPU 功能时，建议使用独立显卡。
-- Linux: x86_64，glibc >= 2.34，libstdc++ >= 3.4.30，Vulkan 兼容显卡。需要 GPU 功能时，建议使用独立显卡。
+- Linux: x86_64, ARM64，glibc >= 2.34，libstdc++ >= 3.4.30，Vulkan 兼容显卡。需要 GPU 功能时，建议使用独立显卡。
 - macOS: 仅苹果芯片，ARM64。
 
 ### 需要GPU的功能
