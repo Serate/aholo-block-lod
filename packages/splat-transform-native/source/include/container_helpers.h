@@ -41,4 +41,4 @@ template<std::ranges::range T>
 inline void append_range(T&& dst, std::initializer_list<std::ranges::range_value_t<T>>&& src) {
     append_range<T, std::initializer_list<std::ranges::range_value_t<T>>&&>(std::forward<T>(dst), std::move(src));
 }
-} // namespace helpers::vector
+} // namespace helpers::container
