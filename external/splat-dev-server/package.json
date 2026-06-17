@@ -3,7 +3,11 @@
   "version": "1.0.1",
   "description": "",
   "author": "egs",
-  "repository": "https://github.com/manycoretech/aholo-viewer.git",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/manycoretech/aholo-viewer.git",
+    "directory": "external/splat-dev-server"
+  },
   "license": "MIT",
   "engines": {
     "node": ">= 22.22.1"

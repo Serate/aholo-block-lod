@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "0",
+      "type": "Read",
+      "config": {
+        "inputs": [""],
+        "output": "cache0"
+      }
+    },
+    {
+      "id": "1",
+      "type": "AutoChunkLod",
+      "config": {
+        "input": "cache0",
+        "output": "cache0",
+        "type": "spz",
+        "maxChunkCounts": "400000"
+      }
+    },
+    {
+      "id": "2",
+      "type": "Write",
+      "config": {
+        "input": "cache0",
+        "output": ""
+      }
+    }
+  ]
+}

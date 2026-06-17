@@ -1,0 +1,31 @@
+#include <napi.h>
+#include <node/api_avif.h>
+#include <node/api_gaussian.h>
+#include <node/api_spatial.h>
+#include <node/api_thread_pool.h>
+#include <node/api_webp.h>
+
+namespace {
+struct InstanceData {
+    Napi::FunctionReference thread_pool;
+};
+} // namespace
+
+static Napi::Object Init(Napi::Env env, Napi::Object exports) {
+    exports.Set("generate_lod", Napi::Function::New(env, node_api::gaussian::generate_lod));
+    exports.Set("webp_encode_rgba", Napi::Function::New(env, node_api::imaging::webp_encode_rgba));
+    exports.Set("webp_encode_rgba_lossless", Napi::Function::New(env, node_api::imaging::webp_encode_rgba_lossless));
+    exports.Set("webp_decode_rgba", Napi::Function::New(env, node_api::imaging::webp_decode_rgba));
+    exports.Set("avif_encode_rgba", Napi::Function::New(env, node_api::imaging::avif_encode_rgba));
+    exports.Set("avif_encode_rgba_batched", Napi::Function::New(env, node_api::imaging::avif_encode_rgba_batched));
+    exports.Set("avif_decode_rgba", Napi::Function::New(env, node_api::imaging::avif_decode_rgba));
+    exports.Set("avif_decode_rgba_batched", Napi::Function::New(env, node_api::imaging::avif_decode_rgba_batched));
+    exports.Set("cluster_average", Napi::Function::New(env, node_api::spatial::cluster_average));
+    auto instance_data = new InstanceData {
+        .thread_pool = node_api::threading::ThreadPool::Init(env, exports)
+    };
+    env.SetInstanceData<InstanceData>(instance_data);
+    return exports;
+}
+
+NODE_API_MODULE(addon_napi, Init)

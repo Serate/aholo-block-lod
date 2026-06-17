@@ -2,9 +2,15 @@ on: workflow_dispatch
 
 name: publish
 
+env:
+  NODE_VERSION: 24
+
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     environment:
       name: publish
       deployment: false
@@ -17,7 +23,27 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Resolve latest native build
+        id: native-build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id="$(gh api --method GET "/repos/${{ github.repository }}/actions/workflows/build-native.yaml/runs" -f branch=master -f status=success -f per_page=1 --jq '.workflow_runs[0].id // empty')"
+          if [ -z "$run_id" ]; then
+            echo "No successful build-native workflow run found on master." >&2
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+      - name: Download native packages
+        uses: actions/download-artifact@v7
+        with:
+          pattern: splat-transform-*
+          path: packages/splat-transform-native
+          merge-multiple: false
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.native-build.outputs.run_id }}
+          github-token: ${{ github.token }}
       - env:
           NPM_TOKEN: ${{secrets.NPM_TOKEN}}
         run: |

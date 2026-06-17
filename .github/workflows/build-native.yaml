@@ -1,0 +1,126 @@
+on: workflow_dispatch
+
+name: build native
+
+env:
+  NODE_VERSION: 24
+
+jobs:
+  build-splat-transform-native:
+    if: github.ref == 'refs/heads/master'
+    name: Build splat-transform native (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: win32-x64-msvc
+            native-script: build:native:win32-x64
+            os: windows-2025-vs2026
+            shell: pwsh
+          - target: linux-x64-gnu
+            native-script: build:native:linux-x64-gnu
+            os: ubuntu-22.04
+            shell: bash
+          - target: linux-arm64-gnu
+            native-script: build:native:linux-arm64-gnu
+            os: ubuntu-22.04-arm
+            shell: bash
+          - target: darwin-arm64
+            native-script: build:native:darwin-arm64
+            os: macos-26
+            shell: bash
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install workspace dependencies
+        run: |
+          corepack enable
+          corepack install
+          pnpm install
+
+      - name: Setup env (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod a+x ./llvm.sh
+          sudo ./llvm.sh 20
+          sudo apt-get update
+          sudo apt-get install -y clang-20 clang-tools-20 lld-20 ninja-build pkg-config
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-20 20
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-20 20
+          sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang-20 20
+          sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-20 20
+          sudo update-alternatives --set clang /usr/bin/clang-20
+          sudo update-alternatives --set clang++ /usr/bin/clang++-20
+          sudo update-alternatives --set cc /usr/bin/clang-20
+          sudo update-alternatives --set c++ /usr/bin/clang++-20
+          echo "CC=/usr/bin/clang-20" >> "${GITHUB_ENV}"
+          echo "CXX=/usr/bin/clang++-20" >> "${GITHUB_ENV}"
+          cmake --version
+          clang-20 --version
+
+      - name: Setup env (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install ninja
+          cmake --version
+          clang --version
+
+      - name: Setup vcpkg (Windows)
+        if: startsWith(matrix.os, 'windows')
+        run: |
+          if ($env:VCPKG_INSTALLATION_ROOT -and (Test-Path $env:VCPKG_INSTALLATION_ROOT)) {
+            $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
+          } else {
+            $vcpkgRoot = Join-Path $env:RUNNER_TEMP "vcpkg"
+            git clone https://github.com/microsoft/vcpkg $vcpkgRoot
+            & (Join-Path $vcpkgRoot "bootstrap-vcpkg.bat") -disableMetrics
+          }
+          "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
+
+      - name: Setup vcpkg (Unix)
+        if: ${{ !startsWith(matrix.os, 'windows') }}
+        run: |
+          if [ -n "${VCPKG_INSTALLATION_ROOT:-}" ] && [ -d "${VCPKG_INSTALLATION_ROOT}" ]; then
+            vcpkg_root="${VCPKG_INSTALLATION_ROOT}"
+          else
+            vcpkg_root="${RUNNER_TEMP}/vcpkg"
+            git clone https://github.com/microsoft/vcpkg "${vcpkg_root}"
+            "${vcpkg_root}/bootstrap-vcpkg.sh" -disableMetrics
+          fi
+          echo "VCPKG_ROOT=${vcpkg_root}" >> "${GITHUB_ENV}"
+
+      - name: Build splat-transform native
+        working-directory: packages/splat-transform-native/source
+        run: pnpm run ${{ matrix.native-script }}
+
+      - name: Validate native package (Windows)
+        if: startsWith(matrix.os, 'windows')
+        run: |
+          if (!(Test-Path ./packages/splat-transform-native/splat-transform-${{ matrix.target }}/splat-transform.node)) {
+            throw "Missing splat-transform.node"
+          }
+
+      - name: Validate native package (Unix)
+        if: ${{ !startsWith(matrix.os, 'windows') }}
+        run: |
+          test -f ./packages/splat-transform-native/splat-transform-${{ matrix.target }}/splat-transform.node
+
+      - name: Upload native package
+        uses: actions/upload-artifact@v7
+        with:
+          name: splat-transform-${{ matrix.target }}
+          path: packages/splat-transform-native/splat-transform-${{ matrix.target }}/splat-transform.node
+          if-no-files-found: error

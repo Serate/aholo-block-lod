@@ -3,7 +3,11 @@
   "version": "1.4.1",
   "description": "A compact TypeScript renderer core used by the Aholo Viewer website and examples.",
   "author": "egs",
-  "repository": "https://github.com/manycoretech/aholo-viewer.git",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/manycoretech/aholo-viewer.git",
+    "directory": "packages/renderer"
+  },
   "license": "MIT",
   "keywords": [
     "aholo",

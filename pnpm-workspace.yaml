@@ -5,8 +5,7 @@ packages:
   - 'external/egs-core/packages/loaders/*'
   - 'external/egs-core/packages/utils/*'
   - 'external/egs-core/tools/utils'
-  - 'external/splat-transform'
-  - 'external/splat-transform-native/*'
+  - 'packages/splat-transform-native/*'
   - 'external/splat-dev-server'
 
 minimumReleaseAge: 0
@@ -30,6 +29,7 @@ overrides:
   '@manycore/aholo-splat-transform': 'workspace:*'
   '@manycore/aholo-splat-dev-server': 'workspace:*'
   '@manycore/aholo-splat-transform-linux-x64-gnu': 'workspace:*'
+  '@manycore/aholo-splat-transform-linux-arm64-gnu': 'workspace:*'
   '@manycore/aholo-splat-transform-win32-x64-msvc': 'workspace:*'
   '@manycore/aholo-splat-transform-darwin-arm64': 'workspace:*'
   '@types/node': '^22.19.19'

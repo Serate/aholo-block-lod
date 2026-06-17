@@ -1,0 +1,187 @@
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <eigen3/Eigen/Dense>
+#include <gaussian/gaussian.h>
+#include <numbers>
+#include <stdexcept>
+#include <tuple>
+#include <utility>
+
+namespace gaussian {
+SH::SH() noexcept : ptr(nullptr), size_(0) {
+}
+
+SH::SH(size_t size) noexcept : size_(size) {
+    this->ptr = new float[size];
+}
+
+SH::SH(const SH& other) noexcept : size_(other.size_) {
+    this->ptr = new float[this->size_];
+    std::copy(other.ptr, other.ptr + this->size_, this->ptr);
+}
+
+SH::SH(SH&& other) noexcept : size_(std::exchange(other.size_, 0)),
+                              ptr(std::exchange(other.ptr, nullptr)) {
+}
+
+SH& SH::operator=(const SH& other) noexcept {
+    this->release();
+    this->size_ = other.size_;
+    this->ptr = new float[this->size_];
+    std::copy(other.ptr, other.ptr + this->size_, this->ptr);
+
+    return *this;
+}
+SH& SH::operator=(SH&& other) noexcept {
+    this->release();
+    this->size_ = std::exchange(other.size_, 0);
+    this->ptr = std::exchange(other.ptr, nullptr);
+
+    return *this;
+}
+
+void SH::swap(SH& other) noexcept {
+    std::swap(this->ptr, other.ptr);
+    std::swap(this->size_, other.size_);
+}
+
+SH& SH::set_zero() noexcept {
+    if (this->ptr) {
+        std::memset(this->ptr, 0, 4 * this->size_);
+    }
+
+    return *this;
+}
+
+SH& SH::add_multiplied(const SH& other, float scalar) noexcept {
+    assert(other.size_ == this->size_);
+
+    for (auto i = 0; i < this->size_; i++) {
+        this->ptr[i] += other.ptr[i] * scalar;
+    }
+
+    return *this;
+}
+
+const float& SH::operator[](size_t index) const {
+    return this->ptr[index];
+}
+
+float& SH::operator[](size_t index) {
+    return this->ptr[index];
+}
+
+void SH::release() noexcept {
+    if (this->ptr) {
+        delete this->ptr;
+        this->ptr = nullptr;
+        this->size_ = 0;
+    }
+}
+
+float* SH::data() noexcept {
+    return this->ptr;
+}
+
+size_t SH::size() const noexcept {
+    return this->size_;
+}
+
+SH::~SH() noexcept {
+    this->release();
+}
+
+void Gaussian::compute_bounding_box(float k) {
+    auto sigma = this->scale.cwiseAbs();
+    this->bounding_box = Eigen::AlignedBox3f(this->mean - k * sigma, this->mean + k * sigma);
+}
+
+void Gaussian::compute_covariance() {
+    Eigen::Matrix3f s = Eigen::Matrix3f::Identity();
+
+    s(0, 0) = this->scale.x();
+    s(1, 1) = this->scale.y();
+    s(2, 2) = this->scale.z();
+
+    auto r = Eigen::Matrix3f(Eigen::Quaternionf(this->rotation));
+
+    Eigen::Matrix3f t = r * s;
+
+    this->covariance = t * t.transpose();
+}
+
+void Gaussian::decompose_covariance() {
+    auto matrix = this->covariance;
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(matrix);
+    auto eigen_values = eigen_solver.eigenvalues();
+    auto eigen_vectors = eigen_solver.eigenvectors();
+
+    if (eigen_values.hasNaN()) {
+        throw std::runtime_error("Found Nans!");
+    }
+
+    int loops = 0;
+    while (eigen_values[0] == 0 || eigen_values[1] == 0 || eigen_values[2] == 0) {
+        matrix(0, 0) += std::max(matrix(0, 0) * 0.0001f, std::numeric_limits<float>::epsilon());
+        matrix(1, 1) += std::max(matrix(1, 1) * 0.0001f, std::numeric_limits<float>::epsilon());
+        matrix(2, 2) += std::max(matrix(2, 2) * 0.0001f, std::numeric_limits<float>::epsilon());
+
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver2(matrix);
+        eigen_values = eigen_solver2.eigenvalues();
+        eigen_vectors = eigen_solver2.eigenvectors();
+
+        loops++;
+    }
+
+    auto v1 = eigen_vectors.col(0);
+    auto v2 = eigen_vectors.col(1);
+    auto v3 = eigen_vectors.col(2);
+
+    auto test = v1.cross(v2);
+
+    if (test.dot(v3) < 0) {
+        eigen_vectors.col(2) *= -1;
+    }
+
+    float a = sqrt(abs(eigen_values.x()));
+    float b = sqrt(abs(eigen_values.y()));
+    float c = sqrt(abs(eigen_values.z()));
+
+    this->scale = { a, b, c };
+    auto q = Eigen::Quaternionf(eigen_vectors);
+    this->rotation = { q.x(), q.y(), q.z(), q.w() };
+    this->rotation.normalize();
+}
+
+float Gaussian::area() const {
+    constexpr float P = 1.6075f;
+    auto numerator = powf(this->scale.x() * this->scale.y(), P) + powf(this->scale.x() * this->scale.z(), P) +
+                     powf(this->scale.y() * this->scale.z(), P);
+    return 4.0f * std::numbers::pi_v<float> * powf(numerator / 3.0f, 1.0f / P);
+}
+
+void Splat::compute_bounding_box() {
+    this->bounding_box = Eigen::AlignedBox3f();
+    for (auto& gaussian : this->gaussians) {
+        this->bounding_box.extend(gaussian.bounding_box);
+    }
+}
+
+void Splat::compute_compact_bounding_box() {
+    this->bounding_box = Eigen::AlignedBox3f();
+    auto ref = std::vector<std::tuple<size_t, float>>();
+    ref.reserve(this->gaussians.size());
+    for (auto i = 0; i < this->gaussians.size(); i++) {
+        ref.emplace_back(i, this->gaussians[i].area());
+    }
+    std::sort(ref.begin(), ref.end(), [](auto& a, auto& b) -> bool { return std::get<1>(a) < std::get<1>(b); });
+    auto needed = static_cast<size_t>(static_cast<double>(this->gaussians.size()) * 0.95);
+    if (needed == 0) {
+        needed = this->gaussians.size();
+    }
+    for (auto i = 0; i < needed; i++) {
+        this->bounding_box.extend(this->gaussians[std::get<0>(ref[i])].bounding_box);
+    }
+}
+} // namespace gaussian

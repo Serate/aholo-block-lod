@@ -1,0 +1,15 @@
+{
+  "name": "@manycore/aholo-splat-transform-darwin-arm64",
+  "version": "1.3.0",
+  "type": "commonjs",
+  "files": [
+    "splat-transform.node",
+    "dawn.node"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ]
+}
