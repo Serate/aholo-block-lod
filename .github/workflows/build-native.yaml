@@ -113,11 +113,13 @@ jobs:
           if (!(Test-Path ./packages/splat-transform-native/splat-transform-${{ matrix.target }}/splat-transform.node)) {
             throw "Missing splat-transform.node"
           }
+          node -e "require('./packages/splat-transform-native/splat-transform-${{ matrix.target }}/splat-transform.node'); console.log('native require ok')"
 
       - name: Validate native package (Unix)
         if: ${{ !startsWith(matrix.os, 'windows') }}
         run: |
           test -f ./packages/splat-transform-native/splat-transform-${{ matrix.target }}/splat-transform.node
+          node -e "require('./packages/splat-transform-native/splat-transform-${{ matrix.target }}/splat-transform.node'); console.log('native require ok')"
 
       - name: Upload native package
         uses: actions/upload-artifact@v7
