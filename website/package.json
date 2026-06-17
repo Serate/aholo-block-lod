@@ -14,7 +14,7 @@
     "@astrojs/markdown-remark": "^7.2.0",
     "@manycore/aholo-viewer": "workspace:*",
     "@tweakpane/plugin-essentials": "^0.2.1",
-    "astro": "^6.4.6",
+    "astro": "^6.4.7",
     "lz-string": "^1.5.0",
     "monaco-editor": "^0.55.1",
     "tslib": "^2.8.1",
