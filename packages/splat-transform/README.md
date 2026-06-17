@@ -34,6 +34,6 @@ Commands:
   lod:auto-chunk [options] <input> <output>  Generate auto-chunk-lod for gaussian splat file
 ```
 
-## CopyRight
+## License
 
-[CopyRight](./COPYRIGHT.md)
+[MIT License](./LICENSE).
