@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.2
+
+- try fix linux-arm64 issues by upgrade clang
+
 ## 1.3.1
 
 - fix block split
