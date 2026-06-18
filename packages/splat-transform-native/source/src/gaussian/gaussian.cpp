@@ -144,9 +144,9 @@ void Gaussian::decompose_covariance() {
         eigen_vectors.col(2) *= -1;
     }
 
-    float a = sqrt(abs(eigen_values.x()));
-    float b = sqrt(abs(eigen_values.y()));
-    float c = sqrt(abs(eigen_values.z()));
+    float a = std::sqrt(std::abs(eigen_values.x()));
+    float b = std::sqrt(std::abs(eigen_values.y()));
+    float c = std::sqrt(std::abs(eigen_values.z()));
 
     this->scale = { a, b, c };
     auto q = Eigen::Quaternionf(eigen_vectors);
@@ -156,9 +156,9 @@ void Gaussian::decompose_covariance() {
 
 float Gaussian::area() const {
     constexpr float P = 1.6075f;
-    auto numerator = powf(this->scale.x() * this->scale.y(), P) + powf(this->scale.x() * this->scale.z(), P) +
-                     powf(this->scale.y() * this->scale.z(), P);
-    return 4.0f * std::numbers::pi_v<float> * powf(numerator / 3.0f, 1.0f / P);
+    auto numerator = std::pow(this->scale.x() * this->scale.y(), P) + std::pow(this->scale.x() * this->scale.z(), P) +
+                     std::pow(this->scale.y() * this->scale.z(), P);
+    return 4.0f * std::numbers::pi_v<float> * std::pow(numerator / 3.0f, 1.0f / P);
 }
 
 void Splat::compute_bounding_box() {
