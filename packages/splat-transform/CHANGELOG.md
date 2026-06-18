@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.1
+
+- fix block split
+
 ## 1.3.0
 
 - update license to MIT and OPEN SOURCE

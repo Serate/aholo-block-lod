@@ -74,7 +74,7 @@ float& SH::operator[](size_t index) {
 
 void SH::release() noexcept {
     if (this->ptr) {
-        delete this->ptr;
+        delete[] this->ptr;
         this->ptr = nullptr;
         this->size_ = 0;
     }

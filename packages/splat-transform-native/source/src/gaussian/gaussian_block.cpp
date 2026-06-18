@@ -93,7 +93,7 @@ std::array<RefSplat, 8> split_block(RefSplat& splat, size_t max_block_size) {
             if (!intersection.isEmpty()) {
                 auto current = intersection.volume();
                 if (current > max_interaction) {
-                    current = max_interaction;
+                    max_interaction = current;
                     max_interaction_index = i;
                 }
             }
