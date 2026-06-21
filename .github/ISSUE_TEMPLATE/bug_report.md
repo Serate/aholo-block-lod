@@ -41,9 +41,10 @@ If applicable, add screenshots to help explain your problem.
 - Version [e.g. 22]
 
 **Viewer Config (If possible, please complete the content, the config you used when call `setViewConfig`)**
+
 ```typescript
 {
-  // fill the config here.
+    // fill the config here.
 }
 ```
 
