@@ -49,8 +49,8 @@ If applicable, add screenshots to help explain your problem.
 
 **Check List**
 
-- [] Can you reproduce the issue on https://aholojs.dev/en-US/viewer/?
-- [] Can you reproduce the issue on the latest version?
+- [ ] Can you reproduce the issue on https://aholojs.dev/en-US/viewer/?
+- [ ] Can you reproduce the issue on the latest version?
 
 **Additional context**
 Add any other context about the problem here.
