@@ -1,5 +1,24 @@
 # ChangeLOG
 
+## 1.5.0
+
+1. Features
+    - add `Splatting.pack.forceUnstableEnabled` to force the complete rendering pipeline.
+    - add `Splatting.sort.frustumCullingEnabled` to pre-cull splats for better performance.
+        - this can make black borders during camera rotation more visible, so enable it carefully in production scenes.
+    - add `Limits` for describing `IRenderer` limits.
+        - some `Capabilities` fields are now marked as deprecated.
+    - add `lod.proxy` to reduce the number of runtime `Splat` objects.
+        - reduces `pack` and `precalculate` GPU cost by 50%-90% in real scenes.
+2. Fixes
+    - fix `SplatHighlightKernel` highlights being offset when `cameraRelativeEnabled` is enabled.
+    - fix `clear` not taking effect correctly when `MRT` is enabled.
+    - fix invalid data when using low-precision packing.
+    - fix the `LodMeta.version` type definition.
+3. Changes
+    - optimize texture-size calculation to improve rendering performance for scenes with a single `Splat` object.
+    - move sorting to a dedicated worker to avoid long parsing tasks blocking sorting.
+
 ## 1.4.1
 
 1. Fixes
