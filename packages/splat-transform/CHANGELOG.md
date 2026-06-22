@@ -1,5 +1,9 @@
 # Changelog
 
+## DEV
+
+- upgrade `commander` to `15.0.0`
+
 ## 1.3.2
 
 - try fix linux-arm64 issues by upgrade clang

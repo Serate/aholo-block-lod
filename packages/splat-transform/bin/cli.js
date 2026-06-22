@@ -18,17 +18,17 @@ program.name(packageJson.name).version(packageJson.version).addHelpText('beforeA
 
 program
     .description('Execute a task pipeline from configuration file')
-    .argument('<path>', 'pipeline config filepath')
-    .action(path => {
-        const content = fs.readFileSync(path, { encoding: 'utf-8' });
+    .argument('<config>', 'pipeline config file')
+    .action(config => {
+        const content = fs.readFileSync(config, { encoding: 'utf-8' });
         runner(JSON.parse(content));
     });
 
 program
     .command('create')
     .description('Merge & Transform gaussian splat file')
-    .argument('<input>', 'input filepath')
-    .argument('<output>', 'output filepath')
+    .argument('<input>', 'input file')
+    .argument('<output>', 'output file')
     .action((input, output) => {
         runner({
             version: 1,
