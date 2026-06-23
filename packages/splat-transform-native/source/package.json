@@ -9,9 +9,10 @@
     "node-addon-api": "^8.8.0"
   },
   "scripts": {
+    "build:native:win32-arm64": "node ./build.js build --preset arm64-windows-static --target win32-arm64-msvc",
     "build:native:win32-x64": "node ./build.js build --preset x64-windows-static --target win32-x64-msvc",
-    "build:native:linux-x64-gnu": "node ./build.js build --preset x64-linux --target linux-x64-gnu",
     "build:native:linux-arm64-gnu": "node ./build.js build --preset arm64-linux --target linux-arm64-gnu",
+    "build:native:linux-x64-gnu": "node ./build.js build --preset x64-linux --target linux-x64-gnu",
     "build:native:darwin-arm64": "node ./build.js build --preset arm64-osx --target darwin-arm64"
   },
   "binary": {
