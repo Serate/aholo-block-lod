@@ -6,7 +6,7 @@ A 3DGS modifier used by aholo
 
 - node >= 22.22.1
 - system
-    - windows: windows 22H2+, x86_64, D3D12 or Vulkan compatible GPU(When use GPU features, dedicated GPU for better performance)
+    - windows: windows 22H2+, x86_64, ARM64, D3D12 or Vulkan compatible GPU(When use GPU features, dedicated GPU for better performance)
     - linux: x86_64, ARM64, glibc >= 2.34, libstdc++ >= 3.4.30, Vulkan compatible GPU(When use GPU features, dedicated GPU for better performance)
     - osx: apple silicon ARM64 only.
 

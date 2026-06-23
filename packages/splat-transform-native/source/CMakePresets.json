@@ -32,6 +32,19 @@
       }
     },
     {
+      "name": "arm64-windows-static",
+      "$comment": ["build config for arm64 windows"],
+      "inherits": "default",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-windows-static"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
       "name": "x64-linux",
       "$comment": ["build config for x64 linux"],
       "inherits": "default",
@@ -92,6 +105,16 @@
       "name": "x64-windows-static",
       "inherits": "default",
       "configurePreset": "x64-windows-static",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "arm64-windows-static",
+      "inherits": "default",
+      "configurePreset": "arm64-windows-static",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
