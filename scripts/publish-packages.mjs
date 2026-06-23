@@ -44,7 +44,7 @@ for (const p of packages) {
 
 if (publishedPackages.length > 0) {
     console.log('published:');
-    for (const package of publishedPackages) {
-        console.log(`\t$${package.name}@${package.version}`);
+    for (const p of publishedPackages) {
+        console.log(`\t$${p.name}@${p.version}`);
     }
 }
