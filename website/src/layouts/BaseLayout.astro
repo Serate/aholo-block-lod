@@ -86,6 +86,21 @@ const workspaceFullscreenScript = `(() => {
         sendEventV2() {},
       };
     </script>
+    <script>
+      const visitLogUrl = 'https://actionstat.kujiale.com/api/toolbehaviors/aholojs_visit/log';
+      const visitLogPayload = {
+        path: location.pathname,
+      };
+
+      fetch(visitLogUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(visitLogPayload),
+        keepalive: true,
+      }).catch(() => {});
+    </script>
     <script is:inline>
       (() => {
         const stored = localStorage.getItem('theme');

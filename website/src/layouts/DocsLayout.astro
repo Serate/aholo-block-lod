@@ -32,6 +32,19 @@ const { lang, title, description, sectionLabel, sectionHref, sidebarItems, sideb
   Astro.props;
 const resolvedTocLabel = tocLabel ?? (lang === 'zh-CN' ? '本页目录' : 'On This Page');
 const hasGeneratedToc = tocHeadings?.some(heading => heading.depth === 2 || heading.depth === 3) ?? false;
+const codeCopyConfigJson = JSON.stringify(
+  lang === 'zh-CN'
+    ? {
+        copyLabel: '复制',
+        copiedLabel: '已复制',
+        failedLabel: '复制失败',
+      }
+    : {
+        copyLabel: 'Copy',
+        copiedLabel: 'Copied',
+        failedLabel: 'Failed',
+      },
+).replace(/</g, '\\u003c');
 ---
 
 <BaseLayout lang={lang} title={title} description={description} pageClass="docs-page">
@@ -64,4 +77,15 @@ const hasGeneratedToc = tocHeadings?.some(heading => heading.depth === 2 || head
     </article>
     {hasGeneratedToc && <DocToc headings={tocHeadings ?? []} label={resolvedTocLabel} />}
   </main>
+  <script is:inline type="application/json" data-docs-code-copy-config set:html={codeCopyConfigJson} />
 </BaseLayout>
+
+<script>
+  import { mountDocsCodeTools } from '../client/docs';
+
+  const configElement = document.querySelector<HTMLScriptElement>('[data-docs-code-copy-config]');
+
+  if (configElement?.textContent) {
+    mountDocsCodeTools(JSON.parse(configElement.textContent));
+  }
+</script>

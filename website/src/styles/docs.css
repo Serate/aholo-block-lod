@@ -630,6 +630,122 @@
     box-shadow: var(--shadow-soft);
 }
 
+.code-block-shell {
+    --code-copy-bg: color-mix(in srgb, var(--code-bg) 82%, var(--code-text));
+    --code-copy-border: color-mix(in srgb, var(--code-text) 24%, transparent);
+    --code-copy-text: var(--code-text);
+    --code-copy-hover-bg: color-mix(in srgb, var(--code-bg) 68%, var(--code-text));
+    --code-copy-failed-text: var(--danger-on-scene);
+    position: relative;
+    width: min(100%, 920px);
+    margin: 18px 0 24px;
+}
+
+.code-block-shell pre {
+    width: 100%;
+    margin: 0;
+    padding-right: 86px;
+}
+
+.typedoc-html .code-block-shell {
+    --code-copy-bg: color-mix(in srgb, var(--surface) 92%, transparent);
+    --code-copy-border: var(--typedoc-line);
+    --code-copy-text: var(--text-soft);
+    --code-copy-hover-bg: var(--surface);
+    --code-copy-failed-text: var(--danger);
+    width: min(100%, 980px);
+    margin: 12px 0 18px;
+}
+
+.typedoc-html .code-block-shell pre {
+    width: 100%;
+    margin: 0;
+    padding-right: 86px;
+}
+
+.code-copy-button {
+    position: absolute;
+    z-index: 2;
+    top: 10px;
+    right: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 64px;
+    min-height: 28px;
+    border: 1px solid var(--code-copy-border);
+    border-radius: var(--radius-sm);
+    background: var(--code-copy-bg);
+    color: var(--code-copy-text);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.74rem;
+    font-weight: 760;
+    line-height: 1;
+    opacity: 0;
+    padding: 0 9px;
+    pointer-events: none;
+    transform: translateY(-2px);
+    transition:
+        background 160ms ease,
+        border-color 160ms ease,
+        color 160ms ease,
+        opacity 160ms ease,
+        transform 160ms ease;
+}
+
+.code-copy-button::before {
+    width: 9px;
+    height: 11px;
+    flex: 0 0 auto;
+    border: 1.4px solid currentColor;
+    border-radius: 2px;
+    box-shadow:
+        -3px -3px 0 -1px var(--code-copy-bg),
+        -3px -3px 0 0 currentColor;
+    content: '';
+}
+
+.code-copy-button:hover {
+    background: var(--code-copy-hover-bg);
+}
+
+.code-block-shell:hover .code-copy-button,
+.code-block-shell:focus-within .code-copy-button,
+.code-copy-button[data-copy-state='copied'],
+.code-copy-button[data-copy-state='failed'] {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.code-copy-button[data-copy-state='copied']::before {
+    width: 10px;
+    height: 6px;
+    border: 0;
+    border-bottom: 2px solid currentColor;
+    border-left: 2px solid currentColor;
+    border-radius: 0;
+    box-shadow: none;
+    transform: rotate(-45deg) translateY(-1px);
+}
+
+.code-copy-button[data-copy-state='failed'] {
+    color: var(--code-copy-failed-text);
+}
+
+.markdown-body pre::selection,
+.markdown-body pre ::selection,
+.typedoc-html pre::selection,
+.typedoc-html pre ::selection,
+.typedoc-html .tsd-signature::selection,
+.typedoc-html .tsd-signature ::selection {
+    background: var(--code-selection-bg);
+    color: var(--code-selection-text);
+}
+
 .typedoc-html {
     --typedoc-code-bg: color-mix(in srgb, var(--surface-muted) 76%, var(--surface));
     --typedoc-line: color-mix(in srgb, var(--border) 72%, transparent);
@@ -1238,5 +1354,19 @@
     .markdown-body img {
         max-height: 56vh;
         border-radius: 6px;
+    }
+
+    .code-block-shell pre,
+    .typedoc-html .code-block-shell pre {
+        padding-right: 78px;
+    }
+
+    .code-copy-button {
+        top: 8px;
+        right: 8px;
+        min-width: 58px;
+        min-height: 26px;
+        padding: 0 8px;
+        font-size: 0.7rem;
     }
 }

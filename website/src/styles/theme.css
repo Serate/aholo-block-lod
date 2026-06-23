@@ -31,6 +31,8 @@
     --danger-on-scene: #fecaca;
     --code-bg: #0f0f10;
     --code-text: #ececee;
+    --code-selection-bg: #2563eb;
+    --code-selection-text: #ffffff;
     --code-type: #0b5cad;
     --code-param: #99461a;
     --code-func: #6e40c9;
@@ -101,6 +103,8 @@
     --danger-strong: color-mix(in srgb, var(--danger) 82%, var(--color-black));
     --code-bg: #0a0a0b;
     --code-text: #dcdce1;
+    --code-selection-bg: #2563eb;
+    --code-selection-text: #ffffff;
     --code-type: #7fb0ea;
     --code-param: #d9a26a;
     --code-func: #b79ce8;
