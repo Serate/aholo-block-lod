@@ -1,8 +1,9 @@
 # Changelog
 
-## DEV
+## 1.4.0
 
 - upgrade `commander` to `15.0.0`
+- add `win32-arm64` pre build binary
 
 ## 1.3.2
 
