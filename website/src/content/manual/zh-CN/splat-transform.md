@@ -365,38 +365,36 @@ Array<{
 #### 使用样例
 
 - 把 a.ply 和 b.ply 应用修改以后转换成 c.spz
-    ```json:
+    ```json
     {
-    "version": 1,
-    "tasks": [
-        {
-            "id": "0",
-            "type": "Read",
-            "config": {
+        "version": 1,
+        "tasks": [
+            {
+                "id": "0",
+                "type": "Read",
+                "config": {
                     "inputs": ["a.ply", "b.ply"],
                     "output": "cache0"
+                }
+            },
+            {
+                "id": "1",
+                "type": "Modify",
+                "config": {
+                    "input": "cache0",
+                    "output": "cache0",
+                    "modifyPaths": ["a.json", "b.json"]
+                }
+            },
+            {
+                "id": "2",
+                "type": "Write",
+                "config": {
+                    "input": "cache0",
+                    "output": "c.spz"
+                }
             }
-        },
-        {
-            "id": "1",
-            "type": "Modify",
-            "config": {
-                "input":
-                "cache0",
-                "output": "cache0",
-                "modifyPaths": ["a.json","b.json"]
-            }
-        },
-        {
-            "id": "2",
-            "type": "Write",
-            "config": {
-                "input":
-                "cache0",
-                "output": "c.spz"
-            }
-        }
-    ]
+        ]
     }
     ```
 - 对 a.ply 应用修改以后生成 auto chunk lod

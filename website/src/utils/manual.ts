@@ -1,8 +1,8 @@
 import { existsSync, promises as fs } from 'fs';
 import { dirname, extname, isAbsolute, relative, resolve } from 'path';
 import { pathToFileURL } from 'url';
-import { createMarkdownProcessor, parseFrontmatter } from '@astrojs/markdown-remark';
-import type { MarkdownHeading } from '@astrojs/markdown-remark';
+import { createSatteriMarkdownProcessor } from '@astrojs/markdown-satteri';
+import { parse as parseYaml } from 'yaml';
 import type { Locale } from '../i18n/locales';
 import { apiManifest } from '../../.generated/api/manifest';
 import { getManualAssetBase, getManualAssetOutputPath } from './manual-assets.js';
@@ -37,7 +37,7 @@ const manualRoot = resolve(process.cwd(), 'src/content/manual');
 const manualAssetRoot = resolve(manualRoot, 'assets');
 const manualAssetBase = getManualAssetBase(import.meta.env.PROD);
 const shouldHashManualAssets = import.meta.env.PROD;
-const markdownProcessor = createMarkdownProcessor();
+const markdownProcessor = createSatteriMarkdownProcessor();
 const apiEntriesBySymbol = createApiEntriesBySymbol();
 
 export async function getManualEntries(locale: Locale): Promise<ManualIndexEntry[]> {
@@ -65,7 +65,7 @@ export async function getManualEntry(locale: Locale, slug: string): Promise<Manu
     }
 
     const source = await fs.readFile(filePath, 'utf8');
-    const { content, frontmatter } = parseFrontmatter(source);
+    const { content, frontmatter } = parseManualFrontmatter(source);
     const rendered = await (
         await markdownProcessor
     ).render(rewriteManualReferences(content, filePath, locale), {
@@ -97,7 +97,7 @@ async function readManualMetadata(locale: Locale, slug: string): Promise<ManualI
         throw new Error(`Manual page not found: ${locale}/${slug}`);
     }
 
-    const { frontmatter } = parseFrontmatter(await fs.readFile(filePath, 'utf8'));
+    const { frontmatter } = parseManualFrontmatter(await fs.readFile(filePath, 'utf8'));
 
     return toManualMetadata(locale, slug, frontmatter);
 }
@@ -148,12 +148,38 @@ function getFrontmatterNumber(
     return value;
 }
 
-function toManualHeadings(headings: MarkdownHeading[]): ManualHeading[] {
+function toManualHeadings(headings: ManualHeading[]): ManualHeading[] {
     return headings.map(heading => ({
         depth: heading.depth,
         slug: heading.slug,
         text: heading.text,
     }));
+}
+
+function parseManualFrontmatter(source: string) {
+    const match = source.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
+
+    if (!match) {
+        return {
+            content: source,
+            frontmatter: {},
+        };
+    }
+
+    const parsedFrontmatter = parseYaml(match[1]) ?? {};
+
+    if (!isRecord(parsedFrontmatter)) {
+        throw new Error('Manual frontmatter must be a YAML object.');
+    }
+
+    return {
+        content: source.slice(match[0].length),
+        frontmatter: parsedFrontmatter,
+    };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 function rewriteManualReferences(content: string, filePath: string, locale: Locale) {

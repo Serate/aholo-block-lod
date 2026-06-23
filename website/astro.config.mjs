@@ -20,7 +20,7 @@ const manualAssetSourceRoot = fileURLToPath(new URL('./src/content/manual/assets
 const manualBuildAssetRoot = fileURLToPath(new URL(`./dist/${astroAssetsDir}/${manualAssetsDir}`, import.meta.url));
 const manualDevAssetPath = manualAssetPath;
 const examplesContentRoot = fileURLToPath(new URL('./src/content/examples', import.meta.url));
-const rollupOutputFileNames = {
+const rolldownOutputFileNames = {
     entryFileNames: `${astroAssetsDir}/[name].[hash:${buildHashLength}].js`,
     chunkFileNames: `${astroAssetsDir}/[name].[hash:${buildHashLength}].js`,
     assetFileNames: `${astroAssetsDir}/[name].[hash:${buildHashLength}][extname]`,
@@ -57,13 +57,13 @@ export default defineConfig({
     },
     vite: {
         build: {
-            rollupOptions: {
-                output: rollupOutputFileNames,
+            rolldownOptions: {
+                output: rolldownOutputFileNames,
             },
         },
         worker: {
-            rollupOptions: {
-                output: rollupOutputFileNames,
+            rolldownOptions: {
+                output: rolldownOutputFileNames,
             },
         },
         server: {
@@ -78,8 +78,8 @@ export default defineConfig({
         environments: {
             client: {
                 build: {
-                    rollupOptions: {
-                        output: rollupOutputFileNames,
+                    rolldownOptions: {
+                        output: rolldownOutputFileNames,
                     },
                 },
             },
