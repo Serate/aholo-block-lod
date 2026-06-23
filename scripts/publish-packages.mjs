@@ -6,6 +6,8 @@ const packages = JSON.parse(
     child_process.execSync('pnpm list --filter=@manycore/* -r -depth -1 --json', { stdio: 'pipe' }).toString('utf-8'),
 ).filter(item => !item.private);
 
+const publishedPackages = [];
+
 for (const p of packages) {
     const cwd = p.path;
     const packageJson = JSON.parse(fs.readFileSync(path.resolve(cwd, 'package.json'), 'utf-8'));
@@ -33,5 +35,16 @@ for (const p of packages) {
             delete packageJson.scripts.build;
         }
         fs.writeFileSync(path.resolve(cwd, 'package.json'), JSON.stringify(packageJson, undefined, 2), 'utf-8');
+        publishedPackages.push({
+            name: p.name,
+            version: p.version,
+        });
+    }
+}
+
+if (publishedPackages.length > 0) {
+    console.log('published:');
+    for (const package of publishedPackages) {
+        console.log(`\t$${package.name}@${package.version}`);
     }
 }

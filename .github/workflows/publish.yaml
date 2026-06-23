@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read
-      contents: read
+      contents: write
     environment:
       name: publish
       deployment: false
@@ -59,8 +59,65 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ steps.native-build.outputs.run_id }}
           github-token: ${{ github.token }}
-      - env:
+      - name: Publish packages
+        id: publish-packages
+        env:
           NPM_TOKEN: ${{secrets.NPM_TOKEN}}
         run: |
+          set -o pipefail
+          publish_log="$(mktemp)"
           chmod a+x ./ci/publish.sh
-          ./ci/publish.sh
+          ./ci/publish.sh | tee "$publish_log"
+          if grep -q '^published:$' "$publish_log"; then
+            echo "has_published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_published=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create GitHub releases
+        if: steps.publish-packages.outputs.has_published == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          releases=(
+            "packages/splat-transform|splat-transform|false"
+            "packages/renderer|aholo-viewer|true"
+          )
+
+          for release in "${releases[@]}"; do
+            IFS='|' read -r package_dir tag_prefix make_latest <<< "$release"
+            package_name="$(node -p "require('./${package_dir}/package.json').name")"
+            package_version="$(node -p "require('./${package_dir}/package.json').version")"
+            tag_name="${tag_prefix}@${package_version}"
+            release_name="${tag_prefix} ${package_version}"
+
+            if gh release view "$tag_name" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+              echo "GitHub release ${tag_name} already exists."
+              continue
+            fi
+
+            echo "Creating GitHub release ${tag_name} for ${package_name}@${package_version}."
+            release_notes_file="$(mktemp)"
+            node scripts/read-package-changelog.mjs "$package_name" "$package_version" > "$release_notes_file"
+
+            if git ls-remote --exit-code --tags origin "refs/tags/${tag_name}" >/dev/null 2>&1; then
+              git fetch --force --depth=1 origin "refs/tags/${tag_name}:refs/tags/${tag_name}"
+              if ! git cat-file -e "${tag_name}^{tag}" 2>/dev/null; then
+                echo "Tag ${tag_name} already exists but is not an annotated tag." >&2
+                exit 1
+              fi
+              echo "Annotated tag ${tag_name} already exists."
+            else
+              git tag -a "$tag_name" "$GITHUB_SHA" -m "$tag_name"
+              git push origin "refs/tags/${tag_name}"
+            fi
+
+            gh api --method POST "/repos/${{ github.repository }}/releases" \
+              -f tag_name="$tag_name" \
+              -f target_commitish="$GITHUB_SHA" \
+              -f name="$release_name" \
+              -F body=@"$release_notes_file" \
+              -f make_latest="$make_latest" >/dev/null
+          done
