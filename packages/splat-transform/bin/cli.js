@@ -130,7 +130,7 @@ program
         const adapters = await enumerateAdapters();
         const alignment = Math.ceil(Math.log10(adapters.length));
         for (const adapter of adapters) {
-            console.log(`adapter ${adapter.index.toString().padStart(alignment, ' ')}: ${adapter.name}`);
+            console.log(`Adapter ${adapter.index.toString().padStart(alignment, ' ')}: ${adapter.name}`);
         }
     });
 
