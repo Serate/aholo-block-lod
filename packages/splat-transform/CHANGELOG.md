@@ -1,5 +1,10 @@
 # Changelog
 
+## DEV
+
+- Add a `compression` option for voxel binary output with `none`, `gzip`, and `zstd` modes.
+- Improve voxel robustness with a `filterCluster` fallback for weak default seeds and automatic dense bounds for scale outliers.
+
 ## 1.4.2
 
 - fix typo in `list:gpu` output
