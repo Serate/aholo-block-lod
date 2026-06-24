@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.2
+
+- fix typo in `list:gpu` output
+
 ## 1.4.1
 
 - add `list:gpu` command
