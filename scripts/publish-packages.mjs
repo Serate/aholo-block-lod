@@ -18,6 +18,7 @@ const packages = JSON.parse(
     ).version;
     for (const p of splatTransformSubPackages) {
         const packageJson = JSON.parse(fs.readFileSync(path.resolve(p.path, 'package.json'), 'utf-8'));
+        p.version = splatTransformMainVersion;
         packageJson.version = splatTransformMainVersion;
         fs.writeFileSync(path.resolve(p.path, 'package.json'), JSON.stringify(packageJson, undefined, 2), 'utf-8');
     }
@@ -62,6 +63,6 @@ for (const p of packages) {
 if (publishedPackages.length > 0) {
     console.log('published:');
     for (const p of publishedPackages) {
-        console.log(`\t$${p.name}@${p.version}`);
+        console.log(`\t${p.name}@${p.version}`);
     }
 }
