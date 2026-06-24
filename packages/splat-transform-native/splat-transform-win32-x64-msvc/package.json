@@ -1,6 +1,6 @@
 {
   "name": "@manycore/aholo-splat-transform-win32-x64-msvc",
-  "version": "inherits",
+  "version": "0.0.0",
   "type": "commonjs",
   "files": [
     "splat-transform.node",

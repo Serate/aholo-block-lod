@@ -1,6 +1,6 @@
 {
   "name": "@manycore/aholo-splat-transform-linux-arm64-gnu",
-  "version": "inherits",
+  "version": "0.0.0",
   "type": "commonjs",
   "files": [
     "splat-transform.node",

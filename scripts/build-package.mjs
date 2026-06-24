@@ -43,7 +43,7 @@ const workerBundles = [
         entryLabel: 'splat worker entry',
         fileName: 'splat-worker.js',
         factorySourceFilter: /loaders[\\/]splat-loader[\\/]index\.ts$/,
-        factoryName: 'SplatWorkerFactor',
+        factoryName: 'WorkerFactor',
         blobUrlName: 'SplatWorkerBlobUrl',
         nextStatement: 'const poll =',
     }),
@@ -55,6 +55,15 @@ const workerBundles = [
         factoryName: 'WorkerFactor',
         blobUrlName: 'TranscoderWorkerBlobUrl',
         nextStatement: 'const pool =',
+    }),
+    createWorkerBundle({
+        entry: 'external/egs-core/packages/utils/splat-utils/worker.ts',
+        entryLabel: 'splat sort worker entry',
+        fileName: 'splat-sort-worker.js',
+        factorySourceFilter: /utils[\\/]splat-utils[\\/]sort\.ts$/,
+        factoryName: 'WorkerFactor',
+        blobUrlName: 'SplatSortWorkerBlobUrl',
+        nextStatement: 'const poll =',
     }),
 ];
 

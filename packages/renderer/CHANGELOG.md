@@ -1,5 +1,12 @@
 # ChangeLOG
 
+## 1.5.1
+
+1. Fixes
+    - fix `lod` scheduling to avoid temporarily creating too many active splats.
+2. Changes
+    - move splat sorting ownership to `SplatUtils`; `SplatLoader` now only parses files.
+
 ## 1.5.0
 
 1. Features

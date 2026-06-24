@@ -1,6 +1,6 @@
 {
   "name": "@manycore/aholo-splat-transform-darwin-arm64",
-  "version": "inherits",
+  "version": "0.0.0",
   "type": "commonjs",
   "files": [
     "splat-transform.node",
