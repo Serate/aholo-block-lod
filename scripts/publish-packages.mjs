@@ -6,6 +6,23 @@ const packages = JSON.parse(
     child_process.execSync('pnpm list --filter=@manycore/* -r -depth -1 --json', { stdio: 'pipe' }).toString('utf-8'),
 ).filter(item => !item.private);
 
+// update splat-transform sub packages version.
+{
+    const splatTransformSubPackages = packages.filter(
+        item =>
+            item.name.startsWith('@manycore/aholo-splat-transform') && item.name !== '@manycore/aholo-splat-transform',
+    );
+    const splatTransformMainPackage = packages.find(item => item.name === '@manycore/aholo-splat-transform');
+    const splatTransformMainVersion = JSON.parse(
+        fs.readFileSync(path.resolve(splatTransformMainPackage.path, 'package.json'), 'utf-8'),
+    ).version;
+    for (const p of splatTransformSubPackages) {
+        const packageJson = JSON.parse(fs.readFileSync(path.resolve(p.path, 'package.json'), 'utf-8'));
+        packageJson.version = splatTransformMainVersion;
+        fs.writeFileSync(path.resolve(p.path, 'package.json'), JSON.stringify(packageJson, undefined, 2), 'utf-8');
+    }
+}
+
 const publishedPackages = [];
 
 for (const p of packages) {

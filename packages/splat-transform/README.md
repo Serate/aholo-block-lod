@@ -32,6 +32,7 @@ Commands:
   lod:flex [options] <input> <output>        Generate flex-lod for gaussian splat file
   lod:auto [options] <input> <output>        Generate auto-lod for gaussian splat file
   lod:auto-chunk [options] <input> <output>  Generate auto-chunk-lod for gaussian splat file
+  list:gpu                                   List all available gpu adapters
 ```
 
 ## License

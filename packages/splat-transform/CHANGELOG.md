@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1
+
+- add `list:gpu` command
+
 ## 1.4.0
 
 - upgrade `commander` to `15.0.0`

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { program } from 'commander';
 import packageJson from '../package.json' with { type: 'json' };
 import { runner } from '../dist/index.js';
+import { enumerateAdapters } from '../dist/utils/index.js';
 
 const ExtraText = `
 Transform Gaussian splats file
@@ -120,6 +121,17 @@ program
                 { id: '2', type: 'Write', config: { input: 'cache0', output: output } },
             ],
         });
+    });
+
+program
+    .command('list:gpu')
+    .description('List all available gpu adapters')
+    .action(async _ => {
+        const adapters = await enumerateAdapters();
+        const alignment = Math.ceil(Math.log10(adapters.length));
+        for (const adapter of adapters) {
+            console.log(`adapter ${adapter.index.toString().padStart(alignment, ' ')}: ${adapter.name}`);
+        }
     });
 
 program.parse();
