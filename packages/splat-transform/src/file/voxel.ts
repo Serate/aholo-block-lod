@@ -319,7 +319,6 @@ function compressVoxelBinary(binary: Uint8Array, compression: VoxelBinaryCompres
                 }),
             };
     }
-    throw new Error(`Invalid voxel compression: ${String(compression)}`);
 }
 
 function formatCompressedSizePercent(rawBytes: number, compressedBytes: number) {
