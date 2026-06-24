@@ -36,14 +36,10 @@ const declarationOutput = resolvePackagePath(
 const runtimeDir = dirname(runtimeOutput);
 const declarationDir = dirname(declarationOutput);
 const tempTypesDir = resolve(packageRoot, 'build');
-const egsPackagesRoot = resolveWorkspacePath(
-    packageJson.aholoBuild?.egsPackagesRoot ?? 'external/egs-core/packages',
-    'EGS packages root',
-);
+const egsPackagesRoot = resolveWorkspacePath('external/egs-core/packages', 'EGS packages root');
 const workerBundles = [
     createWorkerBundle({
-        configKey: 'workerEntry',
-        defaultEntry: 'external/egs-core/packages/loaders/splat-loader/worker.ts',
+        entry: 'external/egs-core/packages/loaders/splat-loader/worker.ts',
         entryLabel: 'splat worker entry',
         fileName: 'splat-worker.js',
         factorySourceFilter: /loaders[\\/]splat-loader[\\/]index\.ts$/,
@@ -52,8 +48,7 @@ const workerBundles = [
         nextStatement: 'const poll =',
     }),
     createWorkerBundle({
-        configKey: 'transcoderWorkerEntry',
-        defaultEntry: 'external/egs-core/packages/loaders/texture-loader/ktx2/basis/worker/transcoder.worker.ts',
+        entry: 'external/egs-core/packages/loaders/texture-loader/ktx2/basis/worker/transcoder.worker.ts',
         entryLabel: 'texture transcoder worker entry',
         fileName: 'transcoder-worker.js',
         factorySourceFilter: /loaders[\\/]texture-loader[\\/]ktx2[\\/]basis[\\/]worker[\\/]pool\.ts$/,
@@ -242,10 +237,7 @@ function removeTypeModifier(specifier) {
 function createWorkerBundle(config) {
     return {
         ...config,
-        entry: resolveWorkspacePath(
-            packageJson.aholoBuild?.[config.configKey] ?? config.defaultEntry,
-            config.entryLabel,
-        ),
+        entry: resolveWorkspacePath(config.entry, config.entryLabel),
     };
 }
 
