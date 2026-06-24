@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.5.0
+## 1.5.1
 
 - Add a `compression` option for voxel binary output with `none`, `gzip`, and `zstd` modes.
 - Improve voxel robustness with a `filterCluster` fallback for weak default seeds and automatic dense bounds for scale outliers.
