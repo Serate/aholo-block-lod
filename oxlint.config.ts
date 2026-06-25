@@ -16,11 +16,7 @@ export default defineConfig({
         '**/.astro/**',
         '**/.generated/**',
         // externals
-        '**/*.impl.ts',
-        '**/wasm/*',
-        '**/draco-loader/*.js',
         'external/splat-dev-server/**',
-        'external/splat-transform/**',
     ],
     rules: {
         'no-console': 'off',
