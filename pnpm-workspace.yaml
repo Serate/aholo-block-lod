@@ -33,6 +33,6 @@ overrides:
   '@manycore/aholo-splat-transform-win32-arm64-msvc': 'workspace:*'
   '@manycore/aholo-splat-transform-win32-x64-msvc': 'workspace:*'
   '@manycore/aholo-splat-transform-darwin-arm64': 'workspace:*'
-  '@types/node': '^22.19.19'
+  '@types/node': '^22.20.0'
   'typescript': '^6.0.3'
   'esbuild': '^0.28.1'

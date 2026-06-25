@@ -1,5 +1,9 @@
 # Changelog
 
+## DEV
+
+- upgrade `fflate` to `^0.8.3`
+
 ## 1.5.1
 
 - Add a `compression` option for voxel binary output with `none`, `gzip`, and `zstd` modes.
