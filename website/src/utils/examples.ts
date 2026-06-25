@@ -1,11 +1,15 @@
-import { getCollection, type CollectionEntry } from 'astro:content';
+import { getCollection } from 'astro:content';
+import type { ExampleData } from '../content.config';
 import type { Locale } from '../i18n/locales';
-
-type ExampleData = CollectionEntry<'examples'>['data'];
 
 export type ExampleItem = ExampleData & {
     slug: string;
     code: string;
+};
+
+type ExampleEntry = {
+    id: string;
+    data: ExampleData;
 };
 
 const exampleSources = import.meta.glob<string>('../content/examples/*.ts', {
@@ -15,12 +19,15 @@ const exampleSources = import.meta.glob<string>('../content/examples/*.ts', {
 });
 
 const allExamples: ExampleItem[] = (await getCollection('examples'))
-    .map(entry => ({
-        slug: entry.id,
-        ...entry.data,
-        code: getExampleCode(entry.id),
-    }))
-    .sort((a, b) => a.order - b.order);
+    .map(
+        (entry: ExampleEntry): ExampleItem => ({
+            slug: entry.id,
+            ...entry.data,
+            code: getExampleCode(entry.id),
+        }),
+    )
+    .filter(e => e.surfaces !== 'none')
+    .sort((a: ExampleItem, b: ExampleItem) => a.order - b.order);
 
 export const examples: ExampleItem[] = allExamples.filter(example => example.surfaces.includes('examples'));
 

@@ -23,6 +23,7 @@ const exampleSurfaces = z
     .refine(surfaces => new Set(surfaces).size === surfaces.length, {
         message: 'Example surfaces must be unique.',
     })
+    .or(z.literal('none'))
     .default(['examples', 'playground']);
 const hexColor = z.string().regex(/^#[\da-f]{6}$/i);
 const exampleCoverImageUrl = z
@@ -47,21 +48,25 @@ const exampleCoverImageUrl = z
         },
     );
 
+const exampleSchema = z.object({
+    order: z.number().int().nonnegative(),
+    surfaces: exampleSurfaces,
+    tags: z.array(z.string().min(1)).min(1),
+    accent: hexColor,
+    coverImageUrl: exampleCoverImageUrl,
+    title: localizedText,
+    renderer: renderSessionRendererOptions,
+    showInteractionGuide: z.boolean().default(true),
+});
+
+export type ExampleData = z.infer<typeof exampleSchema>;
+
 const examples = defineCollection({
     loader: glob({
         base: './src/content/examples',
         pattern: '*.json',
     }),
-    schema: z.object({
-        order: z.number().int().nonnegative(),
-        surfaces: exampleSurfaces,
-        tags: z.array(z.string().min(1)).min(1),
-        accent: hexColor,
-        coverImageUrl: exampleCoverImageUrl,
-        title: localizedText,
-        renderer: renderSessionRendererOptions,
-        showInteractionGuide: z.boolean().default(true),
-    }),
+    schema: exampleSchema,
 });
 
 export const collections = {
