@@ -13,15 +13,21 @@ const packages = JSON.parse(
             item.name.startsWith('@manycore/aholo-splat-transform') && item.name !== '@manycore/aholo-splat-transform',
     );
     const splatTransformMainPackage = packages.find(item => item.name === '@manycore/aholo-splat-transform');
-    const splatTransformMainVersion = JSON.parse(
+    const splatTransformMainPackageJson = JSON.parse(
         fs.readFileSync(path.resolve(splatTransformMainPackage.path, 'package.json'), 'utf-8'),
-    ).version;
+    );
     for (const p of splatTransformSubPackages) {
         const packageJson = JSON.parse(fs.readFileSync(path.resolve(p.path, 'package.json'), 'utf-8'));
-        p.version = splatTransformMainVersion;
-        packageJson.version = splatTransformMainVersion;
+        p.version = splatTransformMainPackageJson.version;
+        packageJson.version = splatTransformMainPackageJson.version;
+        splatTransformMainPackageJson.optionalDependencies[p.name] = splatTransformMainPackageJson.version;
         fs.writeFileSync(path.resolve(p.path, 'package.json'), JSON.stringify(packageJson, undefined, 2), 'utf-8');
     }
+    fs.writeFileSync(
+        path.resolve(splatTransformMainPackage.path, 'package.json'),
+        JSON.stringify(splatTransformMainPackageJson, undefined, 2),
+        'utf-8',
+    );
 }
 
 const publishedPackages = [];
