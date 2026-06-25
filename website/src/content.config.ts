@@ -60,6 +60,7 @@ const exampleSchema = z.object({
 });
 
 export type ExampleData = z.infer<typeof exampleSchema>;
+export type ExampleSurface = z.infer<typeof exampleSurface>;
 
 const examples = defineCollection({
     loader: glob({
