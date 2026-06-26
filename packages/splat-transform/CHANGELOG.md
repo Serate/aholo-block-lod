@@ -1,8 +1,9 @@
 # Changelog
 
-## DEV
+## 1.5.2
 
 - upgrade `fflate` to `^0.8.3`
+- rebuild dawn with `D3D12`, `Vulkan` and `Metal` only.
 
 ## 1.5.1
 
