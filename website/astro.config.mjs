@@ -48,6 +48,8 @@ const rendererInvalidationRules = {
     endsWith: ['/packages/renderer/dist/index.js', '/packages/renderer/dist/splat-worker.js'],
 };
 
+const isProd = process.env.NODE_ENV === 'production';
+
 export default defineConfig({
     output: 'static',
     trailingSlash: 'always',
@@ -85,9 +87,10 @@ export default defineConfig({
             },
         },
         plugins: [
-            checker({
-                typescript: true,
-            }),
+            !isProd &&
+                checker({
+                    typescript: true,
+                }),
             manualAssetsPlugin(),
             manualContentReloadPlugin(),
             examplesContentReloadPlugin(),
