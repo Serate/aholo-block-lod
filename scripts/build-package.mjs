@@ -22,18 +22,9 @@ const packageName = packageJson.name ?? packageRoot;
 const packageRequire = createRequire(resolve(packageRoot, 'package.json'));
 const { build } = await importPackageDependency('esbuild');
 
-const srcEntry = resolvePackagePath(packageRoot, packageJson.source ?? 'src/index.ts', 'source entry');
-const runtimeOutput = resolvePackagePath(
-    packageRoot,
-    packageJson.module ?? packageJson.main ?? 'dist/index.js',
-    'runtime output',
-);
-const declarationOutput = resolvePackagePath(
-    packageRoot,
-    packageJson.types ?? packageJson.typings ?? 'dist/index.d.ts',
-    'declaration output',
-);
-const runtimeDir = dirname(runtimeOutput);
+const srcEntries = [resolvePackagePath(packageRoot, 'src/index.ts', 'source entry')];
+const runtimeDir = resolvePackagePath(packageRoot, 'dist', 'runtime output');
+const declarationOutput = resolvePackagePath(packageRoot, 'dist/index.d.ts', 'declaration output');
 const declarationDir = dirname(declarationOutput);
 const tempTypesDir = resolve(packageRoot, 'build');
 const egsPackagesRoot = resolveWorkspacePath('external/egs-core/packages', 'EGS packages root');
@@ -123,8 +114,8 @@ async function bundleRuntime() {
 
     await build({
         ...shared,
-        entryPoints: [srcEntry],
-        outfile: runtimeOutput,
+        entryPoints: srcEntries,
+        outdir: runtimeDir,
     });
 
     for (const workerBundle of workerBundles) {
