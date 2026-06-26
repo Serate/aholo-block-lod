@@ -232,7 +232,6 @@ function egsCoreReloadPlugin() {
             do {
                 rebuildQueued = false;
                 console.log('[egs-dev] EGS source changed. Rebuilding renderer.');
-                await runWorkspaceScript('.egs:types');
                 await runWorkspaceScript('.renderer:build');
             } while (rebuildQueued);
 
