@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import { program } from 'commander';
 import packageJson from '../package.json' with { type: 'json' };
-import { runner } from '../dist/index.js';
+import { run } from '../dist/index.js';
 import { enumerateAdapters } from '../dist/utils/index.js';
 
 const ExtraText = `
@@ -22,7 +22,7 @@ program
     .argument('<config>', 'pipeline config file')
     .action(config => {
         const content = fs.readFileSync(config, { encoding: 'utf-8' });
-        runner(JSON.parse(content));
+        run(JSON.parse(content));
     });
 
 program
@@ -31,7 +31,7 @@ program
     .argument('<input>', 'input file')
     .argument('<output>', 'output file')
     .action((input, output) => {
-        runner({
+        run({
             version: 1,
             tasks: [
                 { id: '0', type: 'Read', config: { inputs: [input], output: 'cache0' } },
@@ -48,7 +48,7 @@ program
     .argument('<input>', 'input filepath')
     .argument('<output>', 'output filepath')
     .action(async (input, output, arg) => {
-        runner({
+        run({
             version: 1,
             tasks: [
                 { id: '0', type: 'Read', config: { inputs: [input], output: 'cache0' } },
@@ -66,7 +66,7 @@ program
     .argument('<input>', 'input filepath')
     .argument('<output>', 'output filepath')
     .action(async (input, output, arg) => {
-        runner({
+        run({
             version: 1,
             tasks: [
                 { id: '0', type: 'Read', config: { inputs: [input], output: 'cache0' } },
@@ -87,7 +87,7 @@ program
     .argument('<input>', 'input filepath')
     .argument('<output>', 'output filepath')
     .action(async (input, output, arg) => {
-        runner({
+        run({
             version: 1,
             tasks: [
                 { id: '0', type: 'Read', config: { inputs: [input], output: 'cache0' } },
@@ -109,7 +109,7 @@ program
     .argument('<input>', 'input filepath')
     .argument('<output>', 'output directory')
     .action(async (input, output, arg) => {
-        runner({
+        run({
             version: 1,
             tasks: [
                 { id: '0', type: 'Read', config: { inputs: [input], output: 'cache0' } },

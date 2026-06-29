@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.0
+
+- add inject custom task.
+
 ## 1.5.2
 
 - upgrade `fflate` to `^0.8.3`

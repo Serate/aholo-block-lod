@@ -1,33 +1,20 @@
-import { AutoChunkLodTask, type Config as AutoChunkLodConfig } from './tasks/AutoChunkLodTask.js';
-import { AutoLodTask, type Config as AutoLodConfig } from './tasks/AutoLodTask.js';
-import { FlexLodTask, type Config as FlexLodConfig } from './tasks/FlexLodTask.js';
-import { SkeletonLodTask, type Config as SkeletonLodConfig } from './tasks/SkeletonLodTask.js';
-import { ModifyTask, type Config as ModifyConfig } from './tasks/ModifyTask.js';
-import { ReadTask, type Config as ReadConfig } from './tasks/ReadTask.js';
-import { WriteTask, type Config as WriteConfig } from './tasks/WriteTask.js';
-import { VoxelTask, type VoxelTaskConfig } from './tasks/VoxelTask.js';
-import type { Context } from './tasks/BaseTask.js';
+import { AutoChunkLodTask } from './tasks/AutoChunkLodTask.js';
+import { AutoLodTask } from './tasks/AutoLodTask.js';
+import { FlexLodTask } from './tasks/FlexLodTask.js';
+import { SkeletonLodTask } from './tasks/SkeletonLodTask.js';
+import { ModifyTask } from './tasks/ModifyTask.js';
+import { ReadTask } from './tasks/ReadTask.js';
+import { WriteTask } from './tasks/WriteTask.js';
+import { VoxelTask } from './tasks/VoxelTask.js';
+import type { BaseTask, Context } from './tasks/BaseTask.js';
 import { enumerateAdapters, logger, releaseSharedDevice, initGPUAdapter } from './utils/index.js';
 
-interface TaskConfigMap {
-    Read: ReadConfig;
-    Write: WriteConfig;
-    Voxel: VoxelTaskConfig;
-    Modify: ModifyConfig;
-    SkeletonLod: SkeletonLodConfig;
-    FlexLod: FlexLodConfig;
-    AutoLod: AutoLodConfig;
-    AutoChunkLod: AutoChunkLodConfig;
-}
-
 type PipelineTask = {
-    [K in keyof TaskConfigMap]: {
-        id: string;
-        type: K;
-        config: TaskConfigMap[K];
-        release?: string[];
-    };
-}[keyof TaskConfigMap];
+    id: string;
+    type: string;
+    config: any;
+    release?: string[];
+};
 
 interface PipelineConfig {
     version: number;
@@ -35,7 +22,7 @@ interface PipelineConfig {
     tasks: PipelineTask[];
 }
 
-const TaskMap = {
+const TaskMap: Record<string, BaseTask<any>> = {
     Read: new ReadTask(),
     Write: new WriteTask(),
     Voxel: new VoxelTask(),
@@ -46,16 +33,23 @@ const TaskMap = {
     AutoChunkLod: new AutoChunkLodTask(),
 };
 
+export function injectCustomTask<C, T extends BaseTask<C>>(name: string, task: T) {
+    if (TaskMap[name]) {
+        logger.warn(`Task: ${name} has been injected before, will override`);
+    }
+    TaskMap[name] = task;
+}
+
 function anyTaskRequireGPU(tasks: PipelineTask[]) {
     for (const t of tasks) {
-        if (TaskMap[t.type].requiresGPU(t.config as any)) {
+        if (TaskMap[t.type].requiresGPU(t.config)) {
             return true;
         }
     }
     return false;
 }
 
-export async function runner(config: PipelineConfig) {
+export async function run(config: PipelineConfig) {
     console.time('Total elapsed time');
     const ctx: Context = {
         logger,
@@ -75,7 +69,7 @@ export async function runner(config: PipelineConfig) {
         }
         logger.prefix = `[Task:${type}#${id}]`;
         logger.time('elapsed time');
-        await task.exec(taskConfig as any, ctx);
+        await task.exec(taskConfig, ctx);
         release.forEach(v => ctx.resources.delete(v));
         logger.timeEnd('elapsed time');
     }
