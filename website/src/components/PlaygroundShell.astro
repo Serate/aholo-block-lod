@@ -2,8 +2,11 @@
 import InteractionGuide from './InteractionGuide.astro';
 import { dictionary } from '../i18n/dictionary';
 import type { Locale } from '../i18n/locales';
+// oxlint-disable-next-line import/default
 import cameraControlTypes from '../client/camera-control.ts?raw';
+// oxlint-disable-next-line import/default
 import renderRuntimeTypes from '../client/render-runtime.d.ts?raw';
+// oxlint-disable-next-line import/default
 import rendererTypes from '../../node_modules/@manycore/aholo-viewer/dist/index.d.ts?raw';
 import { getPlaygroundPresets } from '../utils/examples';
 

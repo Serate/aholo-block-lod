@@ -1,7 +1,6 @@
 {
   "extends": "@internal/utils/tsconfig.json",
   "compilerOptions": {
-    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "noEmit": true,
     "allowJs": true,
