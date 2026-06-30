@@ -1,5 +1,9 @@
 # Changelog
 
+## DEV
+
+- allow import with extensions
+
 ## 1.6.0
 
 - add inject custom task.
