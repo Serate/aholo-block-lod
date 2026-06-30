@@ -348,9 +348,7 @@ export function createViewer(name: string, container: HTMLElement, config: Engin
 }
 
 export function setViewerConfig(ctx: Viewer | Viewport, config: IViewerConfig) {
-    const viewerConfig: import('@qunhe/egs/src/engine/EngineConfig.js').ConfigCellImpl<
-        import('@qunhe/egs/src/engine/EngineConfig.js').ViewerConfig
-    > = {};
+    const viewerConfig: __INTERNAL__.IViewerConfig = {};
     if (config.pixelRatio) {
         viewerConfig.canvas = {
             renderPixelRatio: config.pixelRatio,
