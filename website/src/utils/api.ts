@@ -1,6 +1,6 @@
-import type { Locale } from '../i18n/locales';
+import type { Locale } from '../i18n/locales.js';
 // @ts-ignore
-import { type ApiCategory, type ApiManifestEntry, apiManifest } from '../../.generated/api/manifest';
+import { type ApiCategory, type ApiManifestEntry, apiManifest } from '../../.generated/api/manifest.js';
 
 export type ApiEntry = ApiManifestEntry & {
     html: string;

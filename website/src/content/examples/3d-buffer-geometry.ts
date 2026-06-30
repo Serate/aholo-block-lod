@@ -1,4 +1,4 @@
-import type { RenderRuntime } from '../../client/render-runtime';
+import type { RenderRuntime } from '../../client/render-runtime.js';
 import {
     AmbientLight,
     BufferAttribute,

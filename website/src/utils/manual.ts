@@ -3,8 +3,8 @@ import { dirname, extname, isAbsolute, relative, resolve } from 'path';
 import { pathToFileURL } from 'url';
 import { createSatteriMarkdownProcessor } from '@astrojs/markdown-satteri';
 import { parse as parseYaml } from 'yaml';
-import type { Locale } from '../i18n/locales';
-import { apiManifest } from '../../.generated/api/manifest';
+import type { Locale } from '../i18n/locales.js';
+import { apiManifest } from '../../.generated/api/manifest.js';
 import { getManualAssetBase, getManualAssetOutputPath } from './manual-assets.js';
 
 interface ManualHeading {

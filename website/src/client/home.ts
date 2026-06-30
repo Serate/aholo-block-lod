@@ -1,4 +1,4 @@
-import { createRenderSession } from './render-runtime';
+import { createRenderSession } from './render-runtime.js';
 
 const HOME_INTERACTION_ENTER_EVENT = 'aholo:home-interaction-enter';
 

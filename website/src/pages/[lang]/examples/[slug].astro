@@ -2,10 +2,10 @@
 import ExampleRail from '../../../components/ExampleRail.astro';
 import ExamplePreview from '../../../components/ExamplePreview.astro';
 import BaseLayout from '../../../layouts/BaseLayout.astro';
-import { dictionary } from '../../../i18n/dictionary';
-import { locales, type Locale } from '../../../i18n/locales';
-import { localizedPath } from '../../../i18n/routes';
-import { examples, type ExampleItem } from '../../../utils/examples';
+import { dictionary } from '../../../i18n/dictionary.js';
+import { locales, type Locale } from '../../../i18n/locales.js';
+import { localizedPath } from '../../../i18n/routes.js';
+import { examples, type ExampleItem } from '../../../utils/examples.js';
 import '../../../styles/examples.css';
 
 export function getStaticPaths() {
@@ -126,7 +126,7 @@ const previewErrorLabel = lang === 'zh-CN' ? '示例运行失败' : 'Example fai
   </main>
 
   <script>
-    import { mountExamplesPage } from '../../../client/examples';
+    import { mountExamplesPage } from '../../../client/examples.js';
 
     mountExamplesPage();
   </script>

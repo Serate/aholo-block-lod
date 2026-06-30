@@ -3,14 +3,14 @@ import * as TweakpaneApi from 'tweakpane';
 import type { Camera3D, Scene3D, Viewer } from '@manycore/aholo-viewer';
 import type { Pane } from 'tweakpane';
 import type { Diagnostic } from 'typescript';
-import { CameraControl } from './camera-control';
+import { CameraControl } from './camera-control.js';
 import {
     abortable as abortableWithMessage,
     countSceneObjects,
     createAbortError as createAbortErrorWithMessage,
     syncCameraAspect,
     throwIfAborted as throwIfAbortedWithMessage,
-} from './rendering';
+} from './rendering.js';
 
 export interface RenderStats {
     drawCalls: number;

@@ -11,7 +11,7 @@
  *
  * Scene presets and spawn poses are defined near the bottom of the file.
  */
-import type { RenderRuntime, RuntimeIndexedDBStorage } from '../../client/render-runtime';
+import type { RenderRuntime, RuntimeIndexedDBStorage } from '../../client/render-runtime.js';
 import {
     AmbientLight,
     Animation,

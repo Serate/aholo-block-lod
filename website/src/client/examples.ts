@@ -1,6 +1,6 @@
-import { createRenderSession } from './render-runtime';
-import { mountSplitPane } from './split-pane';
-import { WORKSPACE_FULLSCREEN_CHANGE_EVENT, mountWorkspaceFullscreenMode } from './workspace-fullscreen';
+import { createRenderSession } from './render-runtime.js';
+import { mountSplitPane } from './split-pane.js';
+import { WORKSPACE_FULLSCREEN_CHANGE_EVENT, mountWorkspaceFullscreenMode } from './workspace-fullscreen.js';
 
 interface PreviewEmbedConfig {
     accent: string;

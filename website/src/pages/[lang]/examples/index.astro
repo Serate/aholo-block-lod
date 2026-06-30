@@ -1,7 +1,7 @@
 ---
-import { locales, type Locale } from '../../../i18n/locales';
-import { localizedPath } from '../../../i18n/routes';
-import { defaultExample } from '../../../utils/examples';
+import { locales, type Locale } from '../../../i18n/locales.js';
+import { localizedPath } from '../../../i18n/routes.js';
+import { defaultExample } from '../../../utils/examples.js';
 
 export function getStaticPaths() {
   return locales.map(locale => ({

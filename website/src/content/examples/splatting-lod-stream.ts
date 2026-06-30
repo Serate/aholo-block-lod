@@ -6,7 +6,7 @@ import {
     ToneMapping,
     type Viewer,
 } from '@manycore/aholo-viewer';
-import type { RenderRuntime, RuntimeConfigPanel, RuntimeIndexedDBStorage } from '../../client/render-runtime';
+import type { RenderRuntime, RuntimeConfigPanel, RuntimeIndexedDBStorage } from '../../client/render-runtime.js';
 
 const LodConfig: Omit<SplatUtils.LodConfig, 'debuggerEnabled' | 'debuggerType' | 'distanceStep'> & {
     highPrecisionEnabled: boolean;

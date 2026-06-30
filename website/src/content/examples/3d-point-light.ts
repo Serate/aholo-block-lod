@@ -10,7 +10,7 @@ import {
     PointLight,
     Vector3,
 } from '@manycore/aholo-viewer';
-import type { RenderRuntime } from '../../client/render-runtime';
+import type { RenderRuntime } from '../../client/render-runtime.js';
 
 const FLOOR_TEXTURE_URL = 'https://holo-cos.aholo3d.cn/aholo-opensource/page/texture/disturb.76f1cbca.jpg';
 

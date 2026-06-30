@@ -1,10 +1,10 @@
 ---
 import LanguageSwitch from './LanguageSwitch.astro';
 import ThemeToggle from './ThemeToggle.astro';
-import { dictionary } from '../../i18n/dictionary';
-import { localizedPath } from '../../i18n/routes';
-import type { Locale } from '../../i18n/locales';
-import { navItems } from '../../utils/navigation';
+import { dictionary } from '../../i18n/dictionary.js';
+import { localizedPath } from '../../i18n/routes.js';
+import type { Locale } from '../../i18n/locales.js';
+import { navItems } from '../../utils/navigation.js';
 
 interface Props {
   lang: Locale;

@@ -1,5 +1,5 @@
 ---
-import type { Locale } from '../i18n/locales';
+import type { Locale } from '../i18n/locales.js';
 
 interface Props {
   activeWhen?: 'interactive';
@@ -91,7 +91,7 @@ const labels =
 </div>
 
 <script>
-  import { mountInteractionGuides } from '../client/interaction-guide';
+  import { mountInteractionGuides } from '../client/interaction-guide.js';
 
   mountInteractionGuides();
 </script>

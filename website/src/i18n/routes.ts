@@ -1,4 +1,4 @@
-import type { Locale } from './locales';
+import type { Locale } from './locales.js';
 
 export function localizedPath(locale: Locale, path = '/') {
     const normalized = path.startsWith('/') ? path : `/${path}`;

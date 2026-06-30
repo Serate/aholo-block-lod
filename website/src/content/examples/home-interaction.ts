@@ -1,5 +1,5 @@
 import { createViewerContext, setViewerConfig, SplatLoader, SplatUtils, ToneMapping } from '@manycore/aholo-viewer';
-import type { RenderRuntime, RuntimeIndexedDBStorage } from '../../client/render-runtime';
+import type { RenderRuntime, RuntimeIndexedDBStorage } from '../../client/render-runtime.js';
 
 const HOME_INTERACTION_ENTER_EVENT = 'aholo:home-interaction-enter';
 

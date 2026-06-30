@@ -1,6 +1,6 @@
 import type { Scene3D, Viewer } from '@manycore/aholo-viewer';
 import type { Pane } from 'tweakpane';
-import type { CameraControl } from './camera-control';
+import type { CameraControl } from './camera-control.js';
 
 export interface RuntimeRenderer {
     readonly viewer: Viewer;

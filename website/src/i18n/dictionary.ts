@@ -1,4 +1,4 @@
-import type { Locale } from './locales';
+import type { Locale } from './locales.js';
 
 type NavKey = 'home' | 'playground' | 'viewer' | 'api' | 'examples' | 'manual';
 

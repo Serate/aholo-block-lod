@@ -1,5 +1,5 @@
 import { type Viewer, setViewerConfig, ToneMapping, SplatLoader, SplatUtils, Vector3 } from '@manycore/aholo-viewer';
-import type { RenderRuntime, RuntimeConfigPanel, RuntimeIndexedDBStorage } from '../../client/render-runtime';
+import type { RenderRuntime, RuntimeConfigPanel, RuntimeIndexedDBStorage } from '../../client/render-runtime.js';
 
 export default async function runner({ renderer, control, loading, configPanel, indexedDB, signal }: RenderRuntime) {
     const { scene, viewer } = renderer;

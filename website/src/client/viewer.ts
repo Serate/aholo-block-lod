@@ -14,13 +14,13 @@ import {
     type Viewer,
 } from '@manycore/aholo-viewer';
 import { Pane } from 'tweakpane';
-import { CameraControl } from './camera-control';
+import { CameraControl } from './camera-control.js';
 import {
     abortable as abortableWithMessage,
     syncCameraAspect,
     throwIfAborted as throwIfAbortedWithMessage,
-} from './rendering';
-import { mountWorkspaceFullscreenMode } from './workspace-fullscreen';
+} from './rendering.js';
+import { mountWorkspaceFullscreenMode } from './workspace-fullscreen.js';
 
 const { SplatFileType, SplatPackType, detectSplatFileType, parseSplatData } = SplatLoader;
 const { LodSplat, createSplat } = SplatUtils;

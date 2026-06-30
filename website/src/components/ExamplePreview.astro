@@ -1,6 +1,6 @@
 ---
 import InteractionGuide from './InteractionGuide.astro';
-import type { Locale } from '../i18n/locales';
+import type { Locale } from '../i18n/locales.js';
 
 interface Props {
   accent: string;
@@ -61,7 +61,7 @@ const configJson = JSON.stringify({
 </div>
 
 <script>
-  import { mountAllPreviewEmbeds } from '../client/examples';
+  import { mountAllPreviewEmbeds } from '../client/examples.js';
 
   mountAllPreviewEmbeds();
 </script>

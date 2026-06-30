@@ -1,10 +1,10 @@
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import { Pane } from 'tweakpane';
 import * as TweakpaneEssentialsPlugin from '@tweakpane/plugin-essentials';
-import type { RenderSession } from './render-runtime';
-import { createRenderSession } from './render-runtime';
-import { mountSplitPane } from './split-pane';
-import { mountWorkspaceFullscreenMode } from './workspace-fullscreen';
+import type { RenderSession } from './render-runtime.js';
+import { createRenderSession } from './render-runtime.js';
+import { mountSplitPane } from './split-pane.js';
+import { mountWorkspaceFullscreenMode } from './workspace-fullscreen.js';
 
 const CODE_QUERY_PARAM = 'code';
 const PRESET_QUERY_PARAM = 'example';

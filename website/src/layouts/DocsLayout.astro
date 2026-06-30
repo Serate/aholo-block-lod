@@ -3,8 +3,8 @@ import BaseLayout from './BaseLayout.astro';
 import Breadcrumbs from '../components/site/Breadcrumbs.astro';
 import Sidebar from '../components/site/Sidebar.astro';
 import DocToc from '../components/docs/DocToc.astro';
-import type { Locale } from '../i18n/locales';
-import type { SidebarItem } from '../utils/navigation';
+import type { Locale } from '../i18n/locales.js';
+import type { SidebarItem } from '../utils/navigation.js';
 import '../styles/docs.css';
 
 interface DocTocHeading {
@@ -81,7 +81,7 @@ const codeCopyConfigJson = JSON.stringify(
 </BaseLayout>
 
 <script>
-  import { mountDocsCodeTools } from '../client/docs';
+  import { mountDocsCodeTools } from '../client/docs.js';
 
   const configElement = document.querySelector<HTMLScriptElement>('[data-docs-code-copy-config]');
 

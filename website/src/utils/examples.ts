@@ -1,6 +1,6 @@
 import { getCollection } from 'astro:content';
-import type { ExampleData, ExampleSurface } from '../content.config';
-import type { Locale } from '../i18n/locales';
+import type { ExampleData, ExampleSurface } from '../content.config.js';
+import type { Locale } from '../i18n/locales.js';
 
 export type ExampleItem = Omit<ExampleData, 'surfaces'> & {
     surfaces: ExampleSurface[];

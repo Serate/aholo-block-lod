@@ -1,6 +1,6 @@
-import type { Locale } from '../i18n/locales';
-import { getApiEntryGroups } from './api';
-import { getManualEntries } from './manual';
+import type { Locale } from '../i18n/locales.js';
+import { getApiEntryGroups } from './api.js';
+import { getManualEntries } from './manual.js';
 
 export const navItems = [
     { key: 'home', href: '/' },
