@@ -1,8 +1,9 @@
 # Changelog
 
-## DEV
+## 1.6.1
 
 - allow import with extensions
+- remove invalid data before merge
 
 ## 1.6.0
 

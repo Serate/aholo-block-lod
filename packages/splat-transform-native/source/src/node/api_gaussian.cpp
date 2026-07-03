@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <atomic>
-#include <bit>
 #include <cassert>
 #include <container_helpers.h>
 #include <gaussian/gaussian.h>

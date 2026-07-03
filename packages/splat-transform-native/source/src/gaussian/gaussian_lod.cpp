@@ -250,7 +250,8 @@ static double compute_edge_cost(const gaussian::Splat& splat, const std::vector<
 }
 
 inline static bool validate_gaussian(const gaussian::Gaussian& gaussian) {
-    return gaussian.opacity >= OPACITY_PRUNE_THRESHOLD;
+    return gaussian.scale.x() != 0 && gaussian.scale.y() != 0 && gaussian.scale.z() != 0 &&
+           gaussian.opacity >= OPACITY_PRUNE_THRESHOLD;
 }
 } // namespace
 
