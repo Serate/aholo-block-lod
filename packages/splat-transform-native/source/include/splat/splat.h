@@ -4,7 +4,7 @@
 #include <memory>
 #include <vector>
 
-namespace gaussian {
+namespace splat {
 class SH {
 public:
     SH() noexcept;
@@ -57,4 +57,4 @@ struct Splat {
     void compute_bounding_box();
     void compute_compact_bounding_box();
 };
-} // namespace gaussian
+} // namespace splat

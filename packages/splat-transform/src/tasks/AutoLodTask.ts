@@ -1,6 +1,6 @@
 import type { SplatData } from '../SplatData.js';
 import { combineSplatData } from '../utils/index.js';
-import { generateLod } from '../native/index.js';
+import { generateSplatLod } from '../native/index.js';
 import { type Context, BaseTask } from './BaseTask.js';
 
 export interface Config {
@@ -19,7 +19,7 @@ export class AutoLodTask extends BaseTask<Config> {
         logger.info(
             `expected -> ${target}(${((target / splat.counts) * 100).toFixed(2)}%) | ratio=${ratio} counts=${counts}`,
         );
-        const { blocks, splats } = generateLod(
+        const { blocks, splats } = generateSplatLod(
             splat,
             [
                 { precision: 1.0, scaleBoost: 1.0 },

@@ -3,12 +3,12 @@
 #include <cmath>
 #include <container_helpers.h>
 #include <eigen3/Eigen/Dense>
-#include <gaussian/gaussian.h>
-#include <gaussian/gaussian_lod.h>
 #include <initializer_list>
 #include <nanoflann.hpp>
 #include <numbers>
 #include <ranges>
+#include <splat/splat.h>
+#include <splat/splat_lod.h>
 #include <thread>
 #include <tuple>
 #include <vector>
@@ -21,7 +21,7 @@ constexpr float OPACITY_PRUNE_THRESHOLD = 0.005f;
 
 class GaussianCloud {
 public:
-    GaussianCloud(const gaussian::Splat& splat) : splat(splat) {}
+    GaussianCloud(const splat::Splat& splat) : splat(splat) {}
 
     inline size_t kdtree_get_point_count() const { return splat.gaussians.size(); }
     inline float kdtree_get_pt(size_t i, int d) const { return splat.gaussians[i].mean[d]; }
@@ -29,7 +29,7 @@ public:
     bool kdtree_get_bbox(BBOX&) const { return false; }
 
 private:
-    const gaussian::Splat& splat;
+    const splat::Splat& splat;
 };
 
 struct GaussianCache {
@@ -47,13 +47,13 @@ using KDTree = nanoflann::KDTreeSingleIndexAdaptor<
     GaussianCloud, 3>;
 
 // https://github.com/graphdeco-inria/gaussian-hierarchy/
-static gaussian::Gaussian merge_gaussians(const gaussian::Splat& input, const std::vector<uint32_t>& idx, float scale_boost) {
-    gaussian::Gaussian out;
+static splat::Gaussian merge_gaussians(const splat::Splat& input, const std::vector<uint32_t>& idx, float scale_boost) {
+    splat::Gaussian out;
     out.mean.setZero();
     out.covariance.setZero();
     out.scale.setZero();
     out.rotation.setZero();
-    out.sh = gaussian::SH(input.gaussians[0].sh.size());
+    out.sh = splat::SH(input.gaussians[0].sh.size());
     out.sh.set_zero();
     out.opacity = 0.0;
 
@@ -105,7 +105,7 @@ static Eigen::Matrix3d sigma_from_rotation_variances(const Eigen::Matrix3d& rota
     return rotation * s * rotation.transpose();
 }
 
-static void build_cache(const gaussian::Splat& splat, std::vector<GaussianCache>& caches) {
+static void build_cache(const splat::Splat& splat, std::vector<GaussianCache>& caches) {
     static Eigen::Vector3d VECTOR_ONE(1.0, 1.0, 1.0);
     static Eigen::Vector3d VECTOR_EPS(EPS_COV, EPS_COV, EPS_COV);
 
@@ -170,7 +170,7 @@ static double log_add_exp(double a, double b) {
     return m + std::log(std::exp(a - m) + std::exp(b - m));
 };
 
-static double compute_edge_cost(const gaussian::Splat& splat, const std::vector<GaussianCache>& caches, const std::vector<Eigen::Vector3d>& samples, std::tuple<uint32_t, uint32_t>& edge) {
+static double compute_edge_cost(const splat::Splat& splat, const std::vector<GaussianCache>& caches, const std::vector<Eigen::Vector3d>& samples, std::tuple<uint32_t, uint32_t>& edge) {
     auto [i, j] = edge;
     auto& u = splat.gaussians[i];
     auto& v = splat.gaussians[j];
@@ -249,13 +249,13 @@ static double compute_edge_cost(const gaussian::Splat& splat, const std::vector<
     return geo + c_sh;
 }
 
-inline static bool validate_gaussian(const gaussian::Gaussian& gaussian) {
+inline static bool validate_gaussian(const splat::Gaussian& gaussian) {
     return gaussian.scale.cwiseNotEqual(0.0f).all() &&
            gaussian.opacity >= OPACITY_PRUNE_THRESHOLD;
 }
 } // namespace
 
-namespace gaussian::lod::detail {
+namespace splat::lod::detail {
 Splat reduce_gaussians(size_t id, const Splat& input, size_t target_count, float scale_boost, size_t max_step) {
     assert(input.gaussians.size() > target_count);
 
@@ -393,4 +393,4 @@ Splat reduce_gaussians(size_t id, const Splat& input, size_t target_count, float
     current.gaussians.shrink_to_fit();
     return current;
 }
-} // namespace gaussian::lod::detail
+} // namespace splat::lod::detail

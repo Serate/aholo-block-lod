@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.2
+
+- reduce lod write out memory overhead
+- rename native api
+
 ## 1.6.1
 
 - allow import with extensions

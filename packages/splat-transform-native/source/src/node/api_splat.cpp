@@ -2,16 +2,17 @@
 #include <atomic>
 #include <cassert>
 #include <container_helpers.h>
-#include <gaussian/gaussian.h>
-#include <gaussian/gaussian_block.h>
-#include <gaussian/gaussian_lod.h>
 #include <node/api_buffer.h>
-#include <node/api_gaussian.h>
+#include <node/api_splat.h>
 #include <node/api_thread_pool.h>
 #include <numeric>
 #include <ranges>
 #include <span>
+#include <splat/splat.h>
+#include <splat/splat_block.h>
+#include <splat/splat_lod.h>
 #include <thread_pool.h>
+
 namespace {
 enum SplatTable {
     SPLAT_TABLE_MEAN_X = 0,
@@ -31,11 +32,11 @@ enum SplatTable {
     SPLAT_TABLE_SH_OFFSET = 14
 };
 
-inline gaussian::Splat read_gaussian(const std::vector<Napi::Buffer<float>>& buffers, size_t sh_size, threading::ThreadPool& pool) {
+inline splat::Splat read_splat(const std::vector<Napi::Buffer<float>>& buffers, size_t sh_size, threading::ThreadPool& pool) {
     auto thread_count = pool.thread_count();
     auto read_count = std::atomic<size_t>(0);
     auto gaussian_count = buffers[0].Length();
-    auto gaussians = std::vector<gaussian::Gaussian>(gaussian_count);
+    auto gaussians = std::vector<splat::Gaussian>(gaussian_count);
 
     auto gaussian_per_thread = std::max(gaussian_count / thread_count, static_cast<size_t>(1));
     auto futures = std::vector<std::future<void>>();
@@ -65,7 +66,7 @@ inline gaussian::Splat read_gaussian(const std::vector<Napi::Buffer<float>>& buf
             gaussian.opacity = buffers[SPLAT_TABLE_OPACITY].Data()[index];
 
             // SH
-            gaussian.sh = ::gaussian::SH(sh_size + 3);
+            gaussian.sh = ::splat::SH(sh_size + 3);
             gaussian.sh[0] = buffers[SPLAT_TABLE_COLOR_R].Data()[index];
             gaussian.sh[1] = buffers[SPLAT_TABLE_COLOR_G].Data()[index];
             gaussian.sh[2] = buffers[SPLAT_TABLE_COLOR_B].Data()[index];
@@ -92,7 +93,7 @@ inline gaussian::Splat read_gaussian(const std::vector<Napi::Buffer<float>>& buf
 
     assert(read_count.load(std::memory_order_acquire) == gaussian_count);
 
-    auto splat = gaussian::Splat {
+    auto splat = splat::Splat {
         .gaussians = std::move(gaussians),
         .bounding_box = Eigen::AlignedBox3f {},
     };
@@ -100,10 +101,10 @@ inline gaussian::Splat read_gaussian(const std::vector<Napi::Buffer<float>>& buf
     return splat;
 }
 
-inline void write_gaussian(
-    const gaussian::Splat& splat,
+inline void write_splat(
+    const splat::Splat& splat,
     threading::ThreadPool& pool,
-    /* out */ std::vector<std::unique_ptr<std::vector<float>>>& buffers) {
+    /* out */ std::span<std::unique_ptr<std::vector<float>>> buffers) {
     auto thread_count = pool.thread_count();
     auto written_count = std::atomic<size_t>(0);
     auto write_offset = buffers[0]->size();
@@ -162,7 +163,7 @@ inline void write_gaussian(
     assert(written_count.load(std::memory_order_acquire) == splat.gaussians.size());
 }
 } // namespace
-namespace node_api::gaussian {
+namespace node_api::splat {
 Napi::Value generate_lod(const Napi::CallbackInfo& info) {
     auto env = info.Env();
     if (info.Length() < 7 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsBuffer() || !info[3].IsNumber() || !info[4].IsNumber() || !info[5].IsNumber() || !info[6].IsObject()) {
@@ -174,7 +175,7 @@ Napi::Value generate_lod(const Napi::CallbackInfo& info) {
     size_t thread_count = pool.thread_count();
 
     auto sh_size = info[1].As<Napi::Number>().Uint32Value();
-    std::vector<::gaussian::Splat> blocks;
+    std::vector<::splat::Splat> blocks;
     // read & create blocks.
     {
         auto buffers = std::vector<Napi::Buffer<float>>();
@@ -183,15 +184,15 @@ Napi::Value generate_lod(const Napi::CallbackInfo& info) {
         for (auto i = 0; i < sh_size + SPLAT_TABLE_SH_OFFSET; i++) {
             buffers.push_back(array[i].AsValue().As<Napi::Buffer<float>>());
         }
-        blocks = ::gaussian::block::split_gaussians(
-            read_gaussian(buffers, sh_size, pool),
+        blocks = ::splat::block::split(
+            read_splat(buffers, sh_size, pool),
             info[3].As<Napi::Number>().DoubleValue());
     }
 
-    auto level_parameters = info[2].As<Napi::Buffer<::gaussian::lod::GaussianLevelParameters>>();
+    auto level_parameters = info[2].As<Napi::Buffer<::splat::lod::SplatLevelParameters>>();
     auto level_parameters_span = std::span(level_parameters.Data() + 1, level_parameters.Length() - 1);
 
-    auto results = std::vector<::gaussian::Splat>();
+    auto results = std::vector<::splat::Splat>();
     auto gaussian_count = std::make_unique<std::vector<uint32_t>>();
     auto block_boxes = std::make_unique<std::vector<float>>();
     auto block_refs = std::make_unique<std::vector<uint32_t>>();
@@ -204,22 +205,22 @@ Napi::Value generate_lod(const Napi::CallbackInfo& info) {
 
     {
         auto levels = level_parameters.Length();
-        auto futures = std::vector<std::future<::gaussian::lod::GaussianLod>>();
+        auto futures = std::vector<std::future<::splat::lod::SplatLod>>();
         auto used_threads = std::min(blocks.size(), thread_count);
         auto min_size = info[4].As<Napi::Number>().Uint32Value();
         auto max_step = info[5].As<Napi::Number>().Uint32Value();
 
         futures.reserve(blocks.size());
 
-        auto process_block = [&, levels, max_step](size_t index) -> ::gaussian::lod::GaussianLod {
+        auto process_block = [&, levels, max_step](size_t index) -> ::splat::lod::SplatLod {
             auto& block = blocks[index];
-            auto lod = ::gaussian::lod::GaussianLod();
+            auto lod = ::splat::lod::SplatLod();
             lod.levels.reserve(level_parameters.Length());
             lod.splats.reserve(level_parameters.Length());
             lod.levels.push_back(0);
             lod.splats.push_back(std::move(block));
             if (level_parameters_span.size() > 0) {
-                ::gaussian::lod::generate_lod(index, lod, level_parameters_span, min_size, max_step);
+                ::splat::lod::generate_lod(index, lod, level_parameters_span, min_size, max_step);
             }
             return lod;
         };
@@ -236,7 +237,7 @@ Napi::Value generate_lod(const Napi::CallbackInfo& info) {
                 helpers::container::append_range(*block_boxes, bbx.min());
                 helpers::container::append_range(*block_boxes, bbx.max());
             }
-            helpers::container::append_range(*gaussian_count, block.splats | std::views::transform([](::gaussian::Splat& splat) -> uint32_t {
+            helpers::container::append_range(*gaussian_count, block.splats | std::views::transform([](::splat::Splat& splat) -> uint32_t {
                 return static_cast<uint32_t>(splat.gaussians.size());
             }));
             helpers::container::append_range(*block_refs, block.levels | std::views::transform([base_offset](uint32_t ref) -> uint32_t {
@@ -253,20 +254,20 @@ Napi::Value generate_lod(const Napi::CallbackInfo& info) {
         }
     }
 
-    auto total = std::reduce(gaussian_count->begin(), gaussian_count->end());
+    // auto total = std::reduce(gaussian_count->begin(), gaussian_count->end());
+    auto buffers_per_splat = sh_size + SPLAT_TABLE_SH_OFFSET;
     auto buffers = std::vector<std::unique_ptr<std::vector<float>>>();
 
-    // prealloc buffer before insertion.
-    buffers.reserve(sh_size + SPLAT_TABLE_SH_OFFSET);
-    {
-        for (auto i = 0; i < sh_size + SPLAT_TABLE_SH_OFFSET; i++) {
-            buffers.push_back(std::make_unique<std::vector<float>>());
-            buffers.back()->reserve(total);
-        }
-    }
+    buffers.reserve(buffers_per_splat * results.size());
 
     for (auto& splat : results) {
-        write_gaussian(splat, pool, buffers);
+        // prealloc buffer before insertion.
+        for (auto i = 0; i < buffers_per_splat; i++) {
+            buffers.push_back(std::make_unique<std::vector<float>>());
+            buffers.back()->reserve(splat.gaussians.size());
+        }
+
+        write_splat(splat, pool, std::span(buffers.begin() + buffers.size() - buffers_per_splat, buffers_per_splat));
 
         // free data already transformed.
         {
@@ -289,4 +290,4 @@ Napi::Value generate_lod(const Napi::CallbackInfo& info) {
     object.Set("gaussianCount", node_api::buffer::UniqueVecBufferFinalizer<uint32_t>::make_buffer(env, std::move(gaussian_count)));
     return object;
 }
-} // namespace node_api::gaussian
+} // namespace node_api::splat

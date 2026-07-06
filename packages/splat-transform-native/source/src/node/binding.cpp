@@ -1,7 +1,7 @@
 #include <napi.h>
 #include <node/api_avif.h>
-#include <node/api_gaussian.h>
 #include <node/api_spatial.h>
+#include <node/api_splat.h>
 #include <node/api_thread_pool.h>
 #include <node/api_webp.h>
 
@@ -12,7 +12,7 @@ struct InstanceData {
 } // namespace
 
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
-    exports.Set("generate_lod", Napi::Function::New(env, node_api::gaussian::generate_lod));
+    exports.Set("generate_splat_lod", Napi::Function::New(env, node_api::splat::generate_lod));
     exports.Set("webp_encode_rgba", Napi::Function::New(env, node_api::imaging::webp_encode_rgba));
     exports.Set("webp_encode_rgba_lossless", Napi::Function::New(env, node_api::imaging::webp_encode_rgba_lossless));
     exports.Set("webp_decode_rgba", Napi::Function::New(env, node_api::imaging::webp_decode_rgba));

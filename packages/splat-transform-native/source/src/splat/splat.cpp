@@ -2,13 +2,13 @@
 #include <cassert>
 #include <cmath>
 #include <eigen3/Eigen/Dense>
-#include <gaussian/gaussian.h>
 #include <numbers>
+#include <splat/splat.h>
 #include <stdexcept>
 #include <tuple>
 #include <utility>
 
-namespace gaussian {
+namespace splat {
 SH::SH() noexcept : ptr(nullptr), size_(0) {
 }
 
@@ -184,4 +184,4 @@ void Splat::compute_compact_bounding_box() {
         this->bounding_box.extend(this->gaussians[std::get<0>(ref[i])].bounding_box);
     }
 }
-} // namespace gaussian
+} // namespace splat

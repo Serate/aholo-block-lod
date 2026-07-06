@@ -1,7 +1,7 @@
 import type { SplatData } from '../SplatData.js';
 import { combineSplatData, computeDenseBox } from '../utils/index.js';
 import { type Context, BaseTask, type SingleFile } from './BaseTask.js';
-import { generateLod, type LevelParameter } from '../native/index.js';
+import { generateSplatLod, type LevelParameter } from '../native/index.js';
 
 export interface Config {
     input: string;
@@ -44,7 +44,13 @@ export class AutoChunkLodTask extends BaseTask<Config> {
         {
             logger.info('generate lod');
             logger.time('generate elapsed');
-            const { blocks, splats } = generateLod(splat, levels, Math.min(1, maxChunkCounts / splat.counts), 2000, 20);
+            const { blocks, splats } = generateSplatLod(
+                splat,
+                levels,
+                Math.min(1, maxChunkCounts / splat.counts),
+                2000,
+                20,
+            );
             logger.timeEnd('generate elapsed');
 
             const chunkL3Idx: number[] = [];

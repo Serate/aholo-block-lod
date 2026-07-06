@@ -18,7 +18,7 @@ interface GaussianLodResult {
      */
     gaussianCount: Buffer;
     /**
-     * splat data, will slice by 4GB, splat.sh or splat.gaussian >= 4GB not supported
+     * splat data table
      */
     data: Buffer[];
 }
@@ -31,7 +31,7 @@ declare namespace NativeModule {
     }
     export interface Module {
         ThreadPool: typeof ThreadPool;
-        generate_lod(
+        generate_splat_lod(
             data: Buffer[],
             shSize: number,
             parameters: Buffer,
@@ -128,7 +128,7 @@ export interface BlockedResult {
     blocks: BlockedSplats[];
 }
 
-export function generateLod(
+export function generateSplatLod(
     splat: SplatData,
     levelParameters: LevelParameter[],
     blockPrecision: number,
@@ -157,7 +157,7 @@ export function generateLod(
             parameters[i * 2 + 1] = scaleBoost;
         }
     }
-    const { blockBoxes, blockRefs, gaussianCount, data } = getModule().generate_lod(
+    const { blockBoxes, blockRefs, gaussianCount, data } = getModule().generate_splat_lod(
         inputBuffers,
         splat.shCounts,
         buffer,
@@ -179,18 +179,16 @@ export function generateLod(
 
     // read splats
     {
-        let gaussianOffset = 0;
-
-        for (const count of gaussianCountView) {
+        for (let i = 0; i < gaussianCountView.length; i++) {
+            const count = gaussianCountView[i];
             const splatData = new SplatData(1, splat.shDegree);
             splatData.shDegree = splat.shDegree;
             splatData.shCounts = splat.shCounts;
             splatData.counts = count;
-            splatData.table = data.map(
-                buffer => new Float32Array(buffer.buffer, buffer.byteOffset + gaussianOffset * 4, count),
-            );
+            splatData.table = data
+                .slice(i * splat.table.length, i * splat.table.length + splat.table.length)
+                .map(buffer => new Float32Array(buffer.buffer, buffer.byteOffset, count));
             splats.push(splatData);
-            gaussianOffset += count;
         }
     }
 

@@ -1,20 +1,20 @@
 #include <array>
 #include <container_helpers.h>
 #include <eigen3/Eigen/Dense>
-#include <gaussian/gaussian_block.h>
 #include <queue>
 #include <ranges>
+#include <splat/splat_block.h>
 #include <utility>
 #include <vector>
 
 namespace {
 struct RefSplat {
-    const gaussian::Splat& source;
+    const splat::Splat& source;
     std::vector<size_t> gaussians;
     Eigen::AlignedBox3f box;
     bool need_split;
 
-    RefSplat(const gaussian::Splat& splat) : source(splat), box(splat.bounding_box), need_split(true) {
+    RefSplat(const splat::Splat& splat) : source(splat), box(splat.bounding_box), need_split(true) {
         this->gaussians.reserve(splat.gaussians.size());
         for (auto i = 0; i < splat.gaussians.size(); i++) {
             this->gaussians.push_back(i);
@@ -36,8 +36,8 @@ struct RefSplat {
                                (this->box.max() - parent_box.max()).norm() > 0.001);
     }
 
-    gaussian::Splat to_owned() {
-        std::vector<gaussian::Gaussian> gaussians;
+    splat::Splat to_owned() {
+        std::vector<splat::Gaussian> gaussians;
         std::vector<float> sh;
         gaussians.reserve(this->gaussians.size());
         for (auto index : this->gaussians) {
@@ -46,7 +46,7 @@ struct RefSplat {
         {
             auto _ = std::move(this->gaussians);
         }
-        auto result = gaussian::Splat {
+        auto result = splat::Splat {
             .gaussians = std::move(gaussians),
             .bounding_box = this->box,
         };
@@ -110,8 +110,8 @@ std::array<RefSplat, 8> split_block(RefSplat& splat, size_t max_block_size) {
 }
 } // namespace
 
-namespace gaussian::block::detail {
-std::vector<Splat> split_gaussians(const Splat& splat, size_t max_block_size) {
+namespace splat::block::detail {
+std::vector<Splat> split(const Splat& splat, size_t max_block_size) {
     if (splat.gaussians.size() <= max_block_size) {
         return std::vector({ splat });
     }
@@ -134,4 +134,4 @@ std::vector<Splat> split_gaussians(const Splat& splat, size_t max_block_size) {
 
     return results;
 }
-} // namespace gaussian::block::detail
+} // namespace splat::block::detail
