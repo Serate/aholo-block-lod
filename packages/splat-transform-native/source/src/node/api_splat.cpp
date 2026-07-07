@@ -269,9 +269,7 @@ Napi::Value generate_lod(const Napi::CallbackInfo& info) {
     buffers.reserve(buffers_per_splat * results.size());
 
     for (auto& splat : results) {
-        helpers::container::append_range(
-            buffers,
-            write_splat(env, buffers_per_splat, splat, pool));
+        helpers::container::append_range(buffers, write_splat(env, buffers_per_splat, splat, pool));
 
         // free data already transformed.
         {
