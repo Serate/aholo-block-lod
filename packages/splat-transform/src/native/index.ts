@@ -21,7 +21,7 @@ declare namespace NativeModule {
         /**
          * splat data table
          */
-        data: Buffer[];
+        data: Float32Array[];
     }
 
     interface SplatSplitResult {
@@ -36,7 +36,7 @@ declare namespace NativeModule {
         /**
          * splat data table
          */
-        data: Buffer[];
+        data: Float32Array[];
     }
 
     class ThreadPool {
@@ -201,9 +201,7 @@ export function generateSplatLod(
             splatData.shDegree = splat.shDegree;
             splatData.shCounts = splat.shCounts;
             splatData.counts = count;
-            splatData.table = data
-                .slice(i * splat.table.length, i * splat.table.length + splat.table.length)
-                .map(buffer => new Float32Array(buffer.buffer, buffer.byteOffset, count));
+            splatData.table = data.slice(i * splat.table.length, i * splat.table.length + splat.table.length);
             splats.push(splatData);
         }
     }
@@ -259,9 +257,7 @@ export function splitSplat(splat: SplatData, blockPrecision: number): BlockedRes
             splatData.shDegree = splat.shDegree;
             splatData.shCounts = splat.shCounts;
             splatData.counts = count;
-            splatData.table = data
-                .slice(i * splat.table.length, i * splat.table.length + splat.table.length)
-                .map(buffer => new Float32Array(buffer.buffer, buffer.byteOffset, count));
+            splatData.table = data.slice(i * splat.table.length, i * splat.table.length + splat.table.length);
             splats.push(splatData);
         }
     }

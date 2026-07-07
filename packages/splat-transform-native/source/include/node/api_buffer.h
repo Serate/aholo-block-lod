@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <napi.h>
+#include <span>
 #include <vector>
 
 namespace node_api::buffer {

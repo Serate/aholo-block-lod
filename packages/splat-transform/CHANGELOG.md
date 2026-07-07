@@ -4,6 +4,7 @@
 
 - add `split` command
 - replace `commander` with `yargs`
+- use `Float32Array` instead of `Buffer` for splat output
 
 ## 1.6.2
 
