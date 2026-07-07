@@ -3,27 +3,42 @@ import { SplatData } from '../SplatData.js';
 import { Buffer } from 'node:buffer';
 import { getNativePackageName } from './utils.js';
 
-interface GaussianLodResult {
-    /**
-     * block bounding box, blocks.
-     */
-    blockBoxes: Buffer;
-    /**
-     * size, blocks * levels, splat reference index of block's level, level orders.
-     * eg. [b0_l0, b0_l1, b0_l2, ....]
-     */
-    blockRefs: Buffer;
-    /**
-     * each splat gaussian count.
-     */
-    gaussianCount: Buffer;
-    /**
-     * splat data table
-     */
-    data: Buffer[];
-}
-
 declare namespace NativeModule {
+    interface SplatLodResult {
+        /**
+         * block bounding box, blocks.
+         */
+        blockBoxes: Buffer;
+        /**
+         * size, blocks * levels, splat reference index of block's level, level orders.
+         * eg. [b0_l0, b0_l1, b0_l2, ....]
+         */
+        blockRefs: Buffer;
+        /**
+         * each splat gaussian count.
+         */
+        gaussianCount: Buffer;
+        /**
+         * splat data table
+         */
+        data: Buffer[];
+    }
+
+    interface SplatSplitResult {
+        /**
+         * block bounding box, blocks.
+         */
+        blockBoxes: Buffer;
+        /**
+         * each splat gaussian count.
+         */
+        gaussianCount: Buffer;
+        /**
+         * splat data table
+         */
+        data: Buffer[];
+    }
+
     class ThreadPool {
         readonly threadCount: number;
         readonly taskCount: number;
@@ -39,7 +54,8 @@ declare namespace NativeModule {
             minSize: number,
             maxStep: number,
             threadPool: ThreadPool,
-        ): GaussianLodResult;
+        ): SplatLodResult;
+        split_splat(data: Buffer[], shSize: number, blockPrecision: number, threadPool: ThreadPool): SplatSplitResult;
         webp_encode_rgba(color: Buffer, width: number, height: number, quality: number): Buffer;
         webp_encode_rgba_lossless(color: Buffer, width: number, height: number): Buffer;
         webp_decode_rgba(data: Buffer): {
@@ -205,6 +221,68 @@ export function generateSplatLod(
 
     return { splats, blocks };
 }
+
+export function splitSplat(splat: SplatData, blockPrecision: number): BlockedResult {
+    if (splat.counts === 0) {
+        return {
+            splats: [splat],
+            blocks: [
+                {
+                    box: { min: [0, 0, 0], max: [0, 0, 0] },
+                    refs: [0],
+                },
+            ],
+        };
+    }
+    const inputBuffers = splat.table.map(b => Buffer.from(b.buffer, b.byteOffset, b.byteLength));
+    const { blockBoxes, gaussianCount, data } = getModule().split_splat(
+        inputBuffers,
+        splat.shCounts,
+        blockPrecision,
+        defaultThreadPool(),
+    );
+    const blocks: BlockedSplats[] = [];
+    const splats: SplatData[] = [];
+    const blockView = new Float32Array(blockBoxes.buffer, blockBoxes.byteOffset, blockBoxes.byteLength / 4);
+    const gaussianCountView = new Uint32Array(
+        gaussianCount.buffer,
+        gaussianCount.byteOffset,
+        gaussianCount.byteLength / 4,
+    );
+    const blockCount = blockView.length / 6;
+
+    // read splats
+    {
+        for (let i = 0; i < gaussianCountView.length; i++) {
+            const count = gaussianCountView[i];
+            const splatData = new SplatData(1, splat.shDegree);
+            splatData.shDegree = splat.shDegree;
+            splatData.shCounts = splat.shCounts;
+            splatData.counts = count;
+            splatData.table = data
+                .slice(i * splat.table.length, i * splat.table.length + splat.table.length)
+                .map(buffer => new Float32Array(buffer.buffer, buffer.byteOffset, count));
+            splats.push(splatData);
+        }
+    }
+
+    for (let i = 0; i < blockCount; i++) {
+        const block: BlockedSplats = {
+            box: {
+                min: [blockView[i * 6], blockView[i * 6 + 1], blockView[i * 6 + 2]],
+                max: [blockView[i * 6 + 3], blockView[i * 6 + 4], blockView[i * 6 + 5]],
+            },
+            refs: [i],
+        };
+        blocks.push(block);
+    }
+
+    return {
+        splats,
+        blocks,
+    };
+}
+
 export class WebPLosslessProfile {
     readonly lossless = true;
 }

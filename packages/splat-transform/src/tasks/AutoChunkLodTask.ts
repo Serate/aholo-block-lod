@@ -34,7 +34,9 @@ const DefaultLevels: LevelParameter[] = [
 export class AutoChunkLodTask extends BaseTask<Config> {
     override async exec(config: Config, { logger, resources }: Context) {
         const { input, output, type, maxChunkCounts = 400000, levels = DefaultLevels } = config;
-        const splat = resources.get(input) as SplatData;
+        const inputData = resources.get(input);
+        // TODO: array support...
+        const splat = Array.isArray(inputData) ? (inputData[0].content as SplatData) : (inputData as SplatData);
         logger.info(`loaded -> "${input}"`);
         const forwardBox = computeDenseBox(splat, 0.8);
 

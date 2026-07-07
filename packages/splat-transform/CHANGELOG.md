@@ -1,5 +1,10 @@
 # Changelog
 
+## DEV
+
+- add `split` command
+- replace `commander` with `yargs`
+
 ## 1.6.2
 
 - reduce lod write out memory overhead

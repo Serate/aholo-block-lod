@@ -290,4 +290,74 @@ Napi::Value generate_lod(const Napi::CallbackInfo& info) {
     object.Set("gaussianCount", node_api::buffer::UniqueVecBufferFinalizer<uint32_t>::make_buffer(env, std::move(gaussian_count)));
     return object;
 }
+
+Napi::Value split(const Napi::CallbackInfo& info) {
+    auto env = info.Env();
+    if (info.Length() < 4 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsNumber() || !info[3].IsObject()) {
+        Napi::TypeError::New(env, "Wrong Arguments").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    auto& pool = node_api::threading::ThreadPool::Unwrap(info[3].As<Napi::Object>())->impl();
+    size_t thread_count = pool.thread_count();
+
+    auto sh_size = info[1].As<Napi::Number>().Uint32Value();
+    std::vector<::splat::Splat> blocks;
+    // read & create blocks.
+    {
+        auto buffers = std::vector<Napi::Buffer<float>>();
+        auto array = info[0].As<Napi::Array>();
+        buffers.reserve(sh_size + SPLAT_TABLE_SH_OFFSET);
+        for (auto i = 0; i < sh_size + SPLAT_TABLE_SH_OFFSET; i++) {
+            buffers.push_back(array[i].AsValue().As<Napi::Buffer<float>>());
+        }
+        blocks = ::splat::block::split(
+            read_splat(buffers, sh_size, pool),
+            info[2].As<Napi::Number>().DoubleValue());
+    }
+
+    auto buffers_per_splat = sh_size + SPLAT_TABLE_SH_OFFSET;
+    auto block_boxes = std::make_unique<std::vector<float>>();
+    auto gaussian_count = std::make_unique<std::vector<uint32_t>>();
+    auto buffers = std::vector<std::unique_ptr<std::vector<float>>>();
+
+    block_boxes->reserve(blocks.size() * 6);
+    gaussian_count->reserve(blocks.size());
+    buffers.reserve(buffers_per_splat * blocks.size());
+
+    for (auto& splat : blocks) {
+        // prealloc buffer before insertion.
+        for (auto i = 0; i < buffers_per_splat; i++) {
+            buffers.push_back(std::make_unique<std::vector<float>>());
+            buffers.back()->reserve(splat.gaussians.size());
+        }
+
+        write_splat(splat, pool, std::span(buffers.begin() + buffers.size() - buffers_per_splat, buffers_per_splat));
+        gaussian_count->push_back(static_cast<uint32_t>(splat.gaussians.size()));
+        {
+            auto& bbx = splat.bounding_box;
+            helpers::container::append_range(*block_boxes, bbx.min());
+            helpers::container::append_range(*block_boxes, bbx.max());
+        }
+
+        // free data already transformed.
+        {
+            auto _ = std::move(splat);
+        }
+    }
+
+    auto object = Napi::Object::New(env);
+    {
+        auto data = Napi::Array::New(env, buffers.size());
+        auto offset = 0;
+        object.Set("data", data);
+        for (auto i = 0; i < buffers.size(); i++) {
+            data[i] = node_api::buffer::UniqueVecBufferFinalizer<float>::make_buffer(env, std::move(buffers[i]));
+        }
+        auto _ = std::move(buffers);
+    }
+    object.Set("blockBoxes", node_api::buffer::UniqueVecBufferFinalizer<float>::make_buffer(env, std::move(block_boxes)));
+    object.Set("gaussianCount", node_api::buffer::UniqueVecBufferFinalizer<uint32_t>::make_buffer(env, std::move(gaussian_count)));
+    return object;
+}
 } // namespace node_api::splat

@@ -1,13 +1,12 @@
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { program } from 'commander';
-import { spawnProcess, execCommand } from '@internal/utils/process.js';
+import yargs from 'yargs/yargs';
+import { hideBin } from 'yargs/helpers';
+import { execCommand } from '@internal/utils/process.js';
 
 const __dirname = import.meta.dirname;
-const require = createRequire(import.meta.url);
 
-program.command('build').action(async function () {
+async function build() {
     await fs.rm('./dist', { recursive: true, force: true });
     await execCommand('tsc', {
         env: {
@@ -15,6 +14,15 @@ program.command('build').action(async function () {
             PATH: path.join(__dirname, '../node_modules/.bin') + path.delimiter + process.env.PATH,
         },
     }).promise;
-});
+}
 
-program.parse();
+await yargs(hideBin(process.argv))
+    .scriptName('build')
+    .strict()
+    .command({
+        command: ['build', '$0'],
+        async handler() {
+            await build();
+        },
+    })
+    .parseAsync();

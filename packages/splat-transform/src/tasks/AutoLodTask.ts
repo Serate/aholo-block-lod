@@ -13,7 +13,9 @@ export interface Config {
 export class AutoLodTask extends BaseTask<Config> {
     override async exec(config: Config, { logger, resources }: Context) {
         const { input, output, counts = Infinity, ratio = 0.3 } = config;
-        const splat = resources.get(input) as SplatData;
+        const inputData = resources.get(input);
+        // TODO: array support...
+        const splat = Array.isArray(inputData) ? (inputData[0].content as SplatData) : (inputData as SplatData);
         logger.info(`loaded -> "${input}"`);
         const target = Math.min(Math.ceil(splat.counts * ratio), counts);
         logger.info(

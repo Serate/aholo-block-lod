@@ -8,6 +8,7 @@ import { WriteTask } from './tasks/WriteTask.js';
 import { VoxelTask } from './tasks/VoxelTask.js';
 import type { BaseTask, Context } from './tasks/BaseTask.js';
 import { enumerateAdapters, logger, releaseSharedDevice, initGPUAdapter } from './utils/index.js';
+import { SplitSplatTask } from './tasks/SplitSplatTask.js';
 
 type PipelineTask = {
     id: string;
@@ -31,6 +32,7 @@ const TaskMap: Record<string, BaseTask<any>> = {
     FlexLod: new FlexLodTask(),
     AutoLod: new AutoLodTask(),
     AutoChunkLod: new AutoChunkLodTask(),
+    SplitSplatTask: new SplitSplatTask(),
 };
 
 export function injectCustomTask<C, T extends BaseTask<C>>(name: string, task: T) {

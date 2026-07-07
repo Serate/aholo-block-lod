@@ -13,6 +13,7 @@ struct InstanceData {
 
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("generate_splat_lod", Napi::Function::New(env, node_api::splat::generate_lod));
+    exports.Set("split_splat", Napi::Function::New(env, node_api::splat::split));
     exports.Set("webp_encode_rgba", Napi::Function::New(env, node_api::imaging::webp_encode_rgba));
     exports.Set("webp_encode_rgba_lossless", Napi::Function::New(env, node_api::imaging::webp_encode_rgba_lossless));
     exports.Set("webp_decode_rgba", Napi::Function::New(env, node_api::imaging::webp_decode_rgba));
