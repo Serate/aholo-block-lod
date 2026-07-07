@@ -185,9 +185,7 @@ const cli = yargs(hideBin(process.argv))
     })
     .command('list:gpu', false, {
         describe: 'List all available gpu adapters',
-        builder() {
-
-        },
+        builder() {},
         async handler() {
             const adapters = await enumerateAdapters();
             const alignment = Math.ceil(Math.log10(adapters.length));
