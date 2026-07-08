@@ -1,7 +1,20 @@
 #include "splat/rad_decoder.h"
-#include "splat/rad_encoder.h"
+#include "splat/lod_tree.h"
 #include <cstdio>
 #include <cassert>
+#include <cstring>
+
+// Simple f16→f32 (same as N-API binding)
+static float f16_to_f32(uint16_t h) {
+    uint32_t sign = (h & 0x8000) << 16;
+    uint32_t exp = (h >> 10) & 0x1f;
+    uint32_t mant = h & 0x3ff;
+    if (exp == 0) { while (!(mant & 0x400) && mant) { mant <<= 1; exp--; } mant &= 0x3ff; exp += 112; }
+    else if (exp == 31) exp = 255;
+    else exp += 112;
+    uint32_t f = sign | (exp << 23) | (mant << 13);
+    float r; memcpy(&r, &f, 4); return r;
+}
 
 int main(int argc, char** argv) {
     if (argc < 2) {
@@ -28,32 +41,23 @@ int main(int argc, char** argv) {
     printf("  count:      %zu\n", result.count);
     printf("  totalNodes: %zu\n", result.totalNodes);
     printf("  shDegree:   %zu\n", result.shDegree);
-    printf("  center:     %zu bytes\n", result.center.size() * 2);
-    printf("  rgba:       %zu bytes\n", result.rgba.size());
-    printf("  scale:      %zu bytes\n", result.scale.size());
-    printf("  quat:       %zu bytes\n", result.quat.size());
-    printf("  sh:         %zu bytes\n", result.sh.size());
     printf("  childStart: %zu x u32\n", result.childStart.size());
     printf("  childCount: %zu x u16\n", result.childCount.size());
 
     if (result.count > 0) {
         printf("\nFirst splat sample:\n");
-        // Check header: GS count
         printf("  GS count: %zu\n", result.count);
 
-        // Verify non-empty output
         assert(!result.center.empty());
         assert(!result.rgba.empty());
         assert(!result.scale.empty());
         assert(!result.quat.empty());
         printf("  All required arrays present ✓\n");
 
-        // Check LOD tree
         if (!result.childStart.empty() && !result.childCount.empty()) {
             size_t non_leaf = 0;
-            for (size_t i = 0; i < result.childCount.size(); i++) {
+            for (size_t i = 0; i < result.childCount.size(); i++)
                 if (result.childCount[i] > 0) non_leaf++;
-            }
             printf("  Internal nodes (with children): %zu / %zu\n", non_leaf, result.totalNodes);
         }
     }
