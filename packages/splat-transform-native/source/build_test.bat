@@ -1,0 +1,5 @@
+@echo off
+call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
+echo Compiling...
+cl /EHsc /std:c++17 /I D:\Project\3dgs\aholo-viewer\packages\splat-transform-native\source\include D:\Project\3dgs\aholo-viewer\packages\splat-transform-native\source\src\splat\rad_decoder.cpp D:\Project\3dgs\aholo-viewer\packages\splat-transform-native\source\test_rad.cpp /Fe:D:\Project\3dgs\aholo-viewer\packages\splat-transform-native\source\test_rad.exe
+echo Done
