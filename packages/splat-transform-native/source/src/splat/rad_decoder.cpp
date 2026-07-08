@@ -125,7 +125,8 @@ static RadMeta parse_meta(const uint8_t* data, size_t size) {
 }
 
 static std::vector<uint8_t> decompress_gzip(const uint8_t* data, size_t size) {
-    // Compression not available in test mode; return raw data.
+    // Stub: returns raw data without decompression.
+    // Proper gzip support requires zlib (available via cmake-js with vcpkg).
     return {data, data + size};
 }
 
