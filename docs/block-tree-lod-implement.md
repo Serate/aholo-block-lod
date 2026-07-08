@@ -2,24 +2,34 @@
 
 ## 概览
 
-把场景切成 Block，每个 Block 独立建 cycling_lod 树 + level-morton 排序 + RAD 输出。运行时按视锥加载各 Block 的 .rad，在 TS 里做树遍历展开 LOD，全局堆合并排序后渲染。
+把场景切成 Block，每个 Block 独立建 cycling_lod 树 + level-morton 排序 + RAD 输出。运行时按视锥加载各 Block 的 .rad，在 C++ 层做树遍历展开 LOD（N-API），全局堆合并排序后渲染。
 
 **Spark 参考代码位置**：所有 `spark-lib/`、`spark-worker-rs/`、`spark/` 引用均指向 `D:\Project\3dgs\spark-2.1.0\`。
 
 ### 数据流总览
 
 ```
-[C++]
+[C++ 构建]
 splat → gaussian_block → vector<Block>
-  → 每 Block: build_lod_tree(vector<Gaussian>) → LodTreeResult
+  → 每 Block: build_lod_tree(Gaussian[]) → LodTreeResult
   → rad_encode(LodTreeResult) → .rad file
 
+[C++ 运行时 (N-API)]
+.rad → rad_decode → 树结构 + GS 属性（驻留 C++ 内存）
+  → 每帧 traverse(camera) → Uint32Array (indices)
+
 [TS]
-.rad → rad_decode → BlkData
-  → BlockTree(BlkData) + pool.upload(BlkData)
-  → per frame: block.traverse(object camera) → TraverseOutput
-  → render(TraverseOutput)
+indices → orderTex.setLevelData() → GPU render
+BlockManager 负责加载/卸载 Block 调度
 ```
+
+### 效率优化
+
+1. **树遍历在 C++（N-API）中执行**，而不是 TS。遍历涉及 ~2M GS 的堆操作，C++ 速度接近 WASM（~5-10 ms），TS 慢 2-5 倍。每帧传入 camera position/forward 参数，C++ 遍历返回 paged_indices。
+
+2. **RAD 解码后数据驻留 C++ 堆**，不完整拷贝到 TS。树结构（childStart/childCount）在 C++ 中保持。TS 只接收每帧的遍历结果（一个小 Uint32Array）和需要上传到 GPU 的纹理数据（一次性上传）。
+
+3. **orderTex 预分配**，不每帧 new SourceTexture。创建一次 2048×2048 R32Uint 纹理，每帧用 texSubImage 更新内容。
 
 ### 关键数据结构
 
@@ -35,26 +45,25 @@ interface Block {
 
 C++ 侧类型，来自 gaussian_block.cpp 的 split_gaussians 产出。 每个 Block 包含该块的所有 GS 原始数据和空间范围。
 
-#### LodTreeResult（C++ 产出 → .rad 文件）
+#### LodTreeResult（C++ 建树产出）
 
 ```typescript
 interface LodTreeResult {
     totalNodes: number; // 原始 GS + merge 节点
     shDegree: number;
-    // GS 属性数组（已按 level-morton 排列）
-    center: Uint16Array; // f16[3] × totalNodes
-    rgb: Uint8Array; // u8[3] × totalNodes
-    alpha: Uint8Array; // u8 × totalNodes
-    scale: Uint8Array; // u8[3] × totalNodes
-    quat: Uint8Array; // u8[3] × totalNodes
-    sh: Uint8Array | null; // 取决于 shDegree
+    // GS 属性数组（已按 level-morton 排列，f32，未编码）
+    center: Float32Array; // f32[3] × totalNodes
+    scale: Float32Array; // f32[3] × totalNodes
+    quat: Float32Array; // f32[4] × totalNodes
+    rgba: Float32Array; // f32[4] × totalNodes
+    sh: Float32Array | null; // f32[N] × totalNodes
     // 树结构
     childStart: Uint32Array; // u32 × totalNodes
     childCount: Uint16Array; // u16 × totalNodes
 }
 ```
 
-这是建树的最终产出。GS 属性 + 树结构全部在这个结构中。RAD 编码器逐属性取出编码为 chunk。rad_decode 反向操作，解码出同结构。
+建树产出 f32 格式的属性数组，RAD 编码器将其编码为压缩格式。rad_decoder 输出 f16/u8 编码后的属性。
 
 #### BlkData（TS 运行时的 Block 数据）
 
@@ -63,14 +72,14 @@ interface BlkData {
     id: number;
     count: number;
     totalNodes: number;
-    nodeData: NodeData[]; // 树节点数组，给遍历器用
-    textureData: {
-        center: Uint16Array; // f16[3] × count，直接用于纹理上传
-        rgba: Uint8Array; // u8[3] × count
-        scale: Uint8Array; // u8[3] × count
-        quat: Uint8Array; // u8[3] × count
-        sh: Uint8Array | null;
-    };
+    // f16/u8 编码的 GS 属性（可直接用于纹理上传）
+    center: Uint16Array; // f16[3] × count
+    rgba: Uint8Array; // u8[4] × count
+    scale: Uint8Array; // u8[3] × count
+    quat: Uint8Array; // u8[3] × count
+    sh: Uint8Array | null;
+    // 树结构
+    nodeData: NodeData[];
 }
 ```
 
@@ -105,8 +114,8 @@ interface TraverseOutput {
 ```typescript
 type PageKey = `${blockId}:${chunk}`;
 // 查找: pool.lookup(blockId, chunk) → texture layer index
-// 分配: pool.alloc(pageKey) → layer index
-// 上传: pool.upload(layer, pageKey, BlkData.textureData)
+// 分配: pool.alloc(blockId, chunk) → layer index
+// 上传: pool.upload(layer, center: Uint16Array, rgba: Uint8Array, scale: Uint8Array, quat: Uint8Array, sh?: Uint8Array)
 ```
 
 ### N-API 函数签名
@@ -120,23 +129,24 @@ C++ 侧暴露给 TS 的函数，遵循现有 `api_splat.cpp` 模式（Napi::Buff
 import native from 'splat-transform-native';
 const result = native.buildLodTree(
   buffers: Float32Array[],    // [x, y, z, sx, sy, sz, qx, qy, qz, qw, r, g, b, a, sh...]
+  count: number,               // GS 数
   shSize: number,              // SH 系数数量
   multipliers: Float32Array,   // [1.0, 1.4, 1.7]
   // 返回:
 ) => {
-  childStart: Uint32Array;     // 全树节点 × u32
-  childCount: Uint16Array;     // 全树节点 × u16
-  center: Uint16Array;         // f16[3] × count
-  rgba: Uint8Array;            // u8[4] × count
-  scale: Uint8Array;           // u8[3] × count
-  quat: Uint8Array;            // u8[3] × count
-  sh: Uint8Array | null;       // 可选
+  center: Float32Array;        // f32[3] × totalNodes
+  scale: Float32Array;         // f32[3] × totalNodes
+  quat: Float32Array;          // f32[4] × totalNodes
+  rgba: Float32Array;          // f32[4] × totalNodes
+  sh: Float32Array | null;     // 可选
+  childStart: Uint32Array;     // u32 × totalNodes
+  childCount: Uint16Array;     // u16 × totalNodes
   treeNodeCount: number;       // 树节点总数
   gsCount: number;             // 原始 GS 数
 };
 ```
 
-C++ 实现：接收 GS 属性 buffer + 参数 → 调用 cycling_lod 建树 → 返回树结构 + level-morton 排列后的 GS 属性。
+C++ 实现：接收 GS 属性 f32 buffer + 参数 → 调用 cycling_lod 建树 → 返回未编码的 f32 数组 + 树结构。RAD 编码器对 f32 属性做编码，rad_decoder 解码为 f16/u8 格式。
 
 **注册名**：`exports.Set("buildLodTree", ...)` 在 `api_lod_tree.cpp`
 
@@ -164,11 +174,33 @@ C++ 实现：解析 header → 遍历 chunk → 解码各属性 → 组装为紧
 
 **注册名**：`exports.Set("decodeRad", ...)` 在 `api_rad_decode.cpp`
 
+#### traverseBlock
+
+```typescript
+// 每帧调用，C++ 端保持树结构数据，传入 camera 参数返回遍历结果
+const result = native.traverseBlock(
+  blockId: number,
+  treeHandle: number,              // decodeRad 返回的树数据句柄
+  cameraPos: Float32Array,         // [x, y, z]
+  cameraForward: Float32Array,     // [x, y, z]
+  lodScale: number,
+  pixelScaleLimit: number,
+  maxSplats: number,
+) => {
+  indices: Uint32Array;            // paged_index 数组
+  numSplats: number;
+};
+```
+
+C++ 实现：在 `api_rad_decode.cpp` 中维护 `Map<treeHandle, TreeData>`。`decodeRad` 返回时存储树数据。`traverseBlock` 根据 handle 找到树数据做 BinaryHeap 遍历，输出 paged_indices。
+
+**注册名**：`exports.Set("traverseBlock", ...)` 在 `api_rad_decode.cpp`
+
 ## 一、构建：分块
 
 复用 aholo 现成的 `gaussian_block.cpp`。从场景 AABB 开始递归 8 等分，每块 GS 数不超过 20 万。GS 按中心坐标准入，边界只分一侧，不复置。叶子 Block 就是最终加载单元。
 
-**参考文件**：`source/src/gaussian/gaussian_block.cpp`
+**参考文件**：`source/src/splat/splat_block.cpp`
 **新增文件**：无
 **修改文件**：无（完全复用）
 
@@ -186,8 +218,8 @@ C++ 实现：解析 header → 遍历 chunk → 解码各属性 → 组装为紧
 
 **新增文件**：
 
-- `source/src/gaussian/gaussian_lod_tree.cpp` — cycling_lod 建树核心
-- `source/include/gaussian/gaussian_lod_tree.h` — 头文件
+- `source/src/splat/lod_tree.cpp` — cycling_lod 建树核心
+- `source/include/splat/lod_tree.h` — 头文件
 
 **修改文件**：
 
@@ -205,8 +237,8 @@ C++ 实现：解析 header → 遍历 chunk → 解码各属性 → 组装为紧
 
 **新增文件**：
 
-- `source/src/gaussian/rad_encoder.cpp` — RAD 编码
-- `source/include/gaussian/rad_encoder.h` — 头文件
+- `source/src/splat/rad_encoder.cpp` — RAD 编码
+- `source/include/splat/rad_encoder.h` — 头文件
 
 **修改文件**：
 
@@ -234,7 +266,7 @@ lod-meta.json 结构：
   "version": "1.0",
   "counts": 总数,
   "shDegree": ...,
-  "levels": 5,
+  "levels": 5,  // 保留兼容，实际由树遍历决定
   "files": ["block_0.rad", "block_1.rad", ...],
   "tree": [
     {"bound": {"min": [...], "max": [...]}, "file": 0, "count": 200000},
@@ -281,11 +313,11 @@ RAD 解码器用 C++ 重写，编译为 aholo 的 Node.js 原生插件（N-API�
 
 ## 六、运行时：BlockTree
 
-每个 Block 加载后创建 BlockTree 实例，持有该 Block 的节点数据（center、size、child_start、child_count）。每帧遍历时从 root 开始算 pixel_scale，推入全局堆。所有 Block 的节点共享同一个堆。
+每个 Block 加载后，其树结构（childStart/childCount）和 GS 属性在 C++ 堆中保持。每帧通过 N-API 调用 C++ 遍历函数，传入 camera 参数，返回该 Block 的 paged_indices。
 
-遍历展开逻辑：pop 堆顶 → 如果 pixel_scale ≤ 阈值则停止；如果是叶子（child_count=0）输出 paged_index；否则展开所有子节点，算 pixel_scale，≥ 阈值的入堆，≤ 的直接输出。
+遍历展开逻辑（C++ BinaryHeap）：pop 堆顶 → 如果 pixel_scale ≤ 阈值则停止；如果是叶子（child_count=0）输出 paged_index；否则展开所有子节点，算 pixel_scale，≥ 阈值的入堆，≤ 的直接输出。
 
-pixel_scale = size / distanceToCamera × lodScale × foveation。
+叶子节点的 `paged_index` 由 GS 数组索引转换而来：`page = pool.lookup(blockId, index >> 14)`，`paged_index = (page << 14) | (index & 0x3FFF)`。
 
 **参考文件**：
 
@@ -358,6 +390,10 @@ aholo 的 Splatting plugin 已有 `orderTex` 机制：每帧读取 GS 深度排�
      splattingGeometry.instancedCount = ceil(N / 128)
   6. GPU 按 orderTex 顺序绘制 N 个 GS
 ```
+
+**访问 orderTex**：`reorderMaterial` 是 SplattingPlugin 的 private 属性。通过在 `external/egs-core/packages/egs/src/fx/plugins/Splatting.ts` 中添加一个 public 方法暴露 orderTex 的写入接口，或注册一个回调让外部替换 orderTex 内容。
+
+**C++ → TS 调用链**：`AutoChunkLodTask.ts` 中读取 `SplatData` 的各属性列（x, y, z, sx, sy, sz, qx, qy, qz, qw, r, g, b, a, sh...），打包为 `Float32Array[]` buffer，调用 `native.buildLodTree(buffers, count, shSize, multipliers)`。返回的 `childStart/childCount` 直接作为树结构写入 .rad 的对应字段，center/scale/quat/rgba/sh 作为 f32 属性写入 chunk。
 
 不需要修改 aholo 引擎的 shader。每个 Block 的 GS 纹理作为 CompressedSplat 上传，按 Block 分配独立纹理页即可。
 

@@ -23,7 +23,31 @@ struct LodTreeResult {
     bool lodTree = false;
 };
 
-/// Build a cycling_lod tree from raw GS arrays.
+/// Per-frame tree traversal. Returns the number of splats output.
+///
+/// Input:
+///   childStart/childCount — tree structure (size = totalNodes)
+///   center — node centers in f32 (f32[3] × totalNodes)
+///   size — node feature sizes (f32 × totalNodes)
+///   cameraPos/cameraForward — camera world space
+///   lodScale, pixelScaleLimit — LOD parameters
+///   maxSplats — traversal budget
+///   out_indices — output buffer (pre-allocated, size >= maxSplats)
+///
+/// Returns number of splats written to out_indices.
+size_t traverse_block(
+    const uint32_t* childStart,
+    const uint16_t* childCount,
+    const float* center,
+    const float* size,
+    size_t totalNodes,
+    const float cameraPos[3],
+    const float cameraForward[3],
+    float lodScale,
+    float pixelScaleLimit,
+    size_t maxSplats,
+    uint32_t* out_indices
+);
 ///
 /// Input arrays are in AoS layout:
 ///   center[f32x3]  → {x0,y0,z0, x1,y1,z1, ...}
