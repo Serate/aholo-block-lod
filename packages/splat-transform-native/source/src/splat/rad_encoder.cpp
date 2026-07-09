@@ -6,8 +6,7 @@
 #include <cstdio>
 #include <sstream>
 
-#define MINIZ_HEADER_FILE_ONLY
-#include "miniz.h"
+#include "zlib.h"
 
 namespace splat {
 
@@ -40,11 +39,27 @@ static void padding8(std::vector<uint8_t>& buf) {
 
 static std::vector<uint8_t> gzip_compress(const std::vector<uint8_t>& data) {
     if (data.empty()) return {};
-    mz_ulong dest_len = data.size() + (data.size() / 100) + 32;
-    std::vector<uint8_t> out(dest_len);
-    int ret = mz_compress(out.data(), &dest_len, data.data(), data.size());
-    if (ret != MZ_OK) return data;
-    out.resize(dest_len);
+
+    // Use zlib's deflate with gzip wrapper (windowBits = 15 + 16 = 31)
+    z_stream strm = {};
+    if (deflateInit2(&strm, Z_BEST_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
+        return data;
+    }
+
+    uLong bound = deflateBound(&strm, data.size());
+    std::vector<uint8_t> out(bound);
+    strm.next_in = const_cast<Bytef*>(data.data());
+    strm.avail_in = (uInt)data.size();
+    strm.next_out = out.data();
+    strm.avail_out = (uInt)out.size();
+
+    int ret = deflate(&strm, Z_FINISH);
+    if (ret != Z_STREAM_END) {
+        deflateEnd(&strm);
+        return data;
+    }
+    out.resize(strm.total_out);
+    deflateEnd(&strm);
     return out;
 }
 

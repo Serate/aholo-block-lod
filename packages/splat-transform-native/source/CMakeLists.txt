@@ -24,6 +24,15 @@ list(APPEND BINDING_SOURCE_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/rad_encoder.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/rad_decoder.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/lod_tree.cpp"
+    # ZLIB (compression for .rad)
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/zlib/adler32.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/zlib/crc32.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/zlib/deflate.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/zlib/inffast.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/zlib/inflate.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/zlib/inftrees.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/zlib/trees.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/zlib/zutil.c"
     # NODE API FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/node/api_splat.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/node/api_spatial.cpp"
@@ -68,6 +77,9 @@ PRIVATE FILE_SET binding_private_headers
 )
 target_link_libraries(${PROJECT_NAME}
     PRIVATE cmake_js::node Threads::Threads Eigen3::Eigen nanoflann::nanoflann WebP::webp avif
+)
+target_include_directories(${PROJECT_NAME}
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 set_target_properties(
     ${PROJECT_NAME} PROPERTIES
