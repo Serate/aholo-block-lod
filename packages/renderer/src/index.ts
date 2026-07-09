@@ -86,6 +86,8 @@ import * as GLTFLoader from './gltf-loader.js';
 import * as SplatUtils from './splat-utils.js';
 import { SharedTexturePool } from './shared-texture-pool.js';
 import { BlockManager, BlockState, type BlockMeta, type BlockHandle } from './block-manager.js';
+import { BlockTree, type DecodedBlock } from './block-tree.js';
+import { BlockLodRenderer } from './block-renderer.js';
 
 import {
     Application,
@@ -378,6 +380,8 @@ export {
     SharedTexturePool,
     BlockManager,
     BlockState,
+    BlockTree,
+    BlockLodRenderer,
 };
 
-export type { BlockMeta, BlockHandle };
+export type { BlockMeta, BlockHandle, DecodedBlock };
