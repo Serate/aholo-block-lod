@@ -412,41 +412,36 @@ aholo 的 Splatting plugin 已有 `orderTex` 机制：每帧读取 GS 深度排�
 
 ## 实现顺序
 
-### 第一梯队（无依赖，可并行）
+### 第一梯队（已完成）
 
 ```
-A: morton_code.h ← 纯位运算，从 Spark ordering.rs 复制
-B: rad_encoder.cpp ← 数据编码，不依赖建树
-C: rad_decoder.cpp ← 数据解码，可从已知 .rad 文件验证
+A: morton_code.h ✅
+B: rad_encoder.cpp ✅（简化版）
+C: rad_decoder.cpp ✅（zlib gzip 解压 + 结构解析）
 ```
 
-### 第二梯队（逐个依赖第一梯队）
+### 第二梯队
 
 ```
-D: gaussian_lod_tree.cpp ← 依赖 A
-   cycling_lod 建树 + level-morton permute
-E: api_lod_tree.cpp ← N-API 绑定，暴露 buildLodTree
-   TS 端可调用后验证单 Block 建树
+D: lod_tree.cpp ✅  build_lod_tree + traverse_block
+E: api_lod_tree.cpp ⏳ N-API 绑定 buildLodTree
 ```
 
-### 第三梯队（TS 运行时，可并行）
+### 第三梯队（TS 运行时，待写）
 
 ```
-F: block-tree.ts ← 独立的 TS 堆遍历，可用写死的树结构模拟测试
-G: block-manager.ts ← 视锥测试 + 状态机，可独立测试
-H: shared-texture-pool.ts ← 纹理页分配 + LRU
+F: block-tree.ts — 用 native.traverseBlock 代替
+G: block-manager.ts — 视锥测试 + 状态机
+H: shared-texture-pool.ts — 纹理页分配 + LRU
 ```
 
-### 第四梯队（依赖第二、三梯队）
+### 第四梯队（待写）
 
 ```
-I: AutoChunkLodTask.ts ← 编排 buildLodTree → 输出 .rad
-J: 渲染循环 ← orderTex 写入 + instancedCount 控制
-K: viewer.ts ← 串联 blockManager → traverse → orderTex
+I: AutoChunkLodTask.ts — 编排 buildLodTree → .rad 输出
+J: 渲染循环 — orderTex 写入 + instancedCount 控制
+K: viewer.ts — 串联 blockManager → traverse → orderTex
 ```
-
-**可并行**：第一梯队 A/B/C 三人可同时开工。第三梯队 F/G/H 三人可同时开工。
-**不可并行**：D 依赖 A，E 依赖 D，I 依赖 B+E，J/K 依赖 F/G/H+E。
 
 ## 关键参数
 

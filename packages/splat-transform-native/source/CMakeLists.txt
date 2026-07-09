@@ -20,9 +20,10 @@ list(APPEND BINDING_SOURCE_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/splat.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/splat_lod.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/splat_block.cpp"
-    # RAD ENCODER / DECODER
+    # RAD ENCODER / DECODER / LOD TREE
     "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/rad_encoder.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/rad_decoder.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/splat/lod_tree.cpp"
     # NODE API FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/node/api_splat.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/node/api_spatial.cpp"
@@ -30,6 +31,7 @@ list(APPEND BINDING_SOURCE_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/node/api_webp.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/node/api_avif.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/node/api_rad_decode.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/node/api_lod_tree.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/node/binding.cpp"
 )
 list(APPEND BINDING_HEADER_FILES
@@ -42,6 +44,7 @@ list(APPEND BINDING_HEADER_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/include/splat/morton_code.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/splat/rad_encoder.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/splat/rad_decoder.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/splat/lod_tree.h"
     # NODE API FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/include/node/api_buffer.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/node/api_splat.h"
@@ -50,6 +53,7 @@ list(APPEND BINDING_HEADER_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/include/node/api_webp.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/node/api_avif.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/node/api_rad_decode.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/node/api_lod_tree.h"
 )
 target_sources(${PROJECT_NAME}
 PRIVATE
