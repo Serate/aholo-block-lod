@@ -32,6 +32,14 @@
       }
     },
     {
+      "name": "local",
+      "$comment": ["build without vcpkg, use locally installed packages"],
+      "toolchainFile": "${sourceDir}/cmake/toolchain-local.cmake",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/cmake"
+      }
+    },
+    {
       "name": "arm64-windows-static",
       "$comment": ["build config for arm64 windows"],
       "inherits": "default",
@@ -110,6 +118,11 @@
         "lhs": "${hostSystemName}",
         "rhs": "Windows"
       }
+    },
+    {
+      "name": "local",
+      "configurePreset": "local",
+      "jobs": 8
     },
     {
       "name": "arm64-windows-static",

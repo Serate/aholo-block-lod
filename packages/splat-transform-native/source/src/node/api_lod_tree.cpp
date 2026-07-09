@@ -15,8 +15,8 @@ Napi::Value buildLodTree(const Napi::CallbackInfo& info) {
         return env.Null();
     }
 
-    if (!info[0].IsFloat32Array() || !info[1].IsFloat32Array() ||
-        !info[2].IsFloat32Array() || !info[3].IsFloat32Array()) {
+    if (!info[0].IsTypedArray() || !info[1].IsTypedArray() ||
+        !info[2].IsTypedArray() || !info[3].IsTypedArray()) {
         Napi::TypeError::New(env, "center, scale, quat, rgba must be Float32Array")
             .ThrowAsJavaScriptException();
         return env.Null();
@@ -37,7 +37,7 @@ Napi::Value buildLodTree(const Napi::CallbackInfo& info) {
     }
 
     std::vector<float> multipliers = {1.0f, 1.4f, 1.7f};
-    if (info.Length() >= 8 && info[7].IsFloat32Array()) {
+    if (info.Length() >= 8 && info[7].IsTypedArray()) {
         auto multBuf = info[7].As<Napi::Float32Array>();
         multipliers.assign(multBuf.Data(), multBuf.Data() + multBuf.ElementLength());
     }

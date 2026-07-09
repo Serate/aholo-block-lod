@@ -14,8 +14,8 @@ Napi::Value encodeRad(const Napi::CallbackInfo& info) {
         return env.Null();
     }
 
-    if (!info[0].IsFloat32Array() || !info[1].IsFloat32Array() ||
-        !info[2].IsFloat32Array() || !info[3].IsFloat32Array()) {
+    if (!info[0].IsTypedArray() || !info[1].IsTypedArray() ||
+        !info[2].IsTypedArray() || !info[3].IsTypedArray()) {
         Napi::TypeError::New(env, "center, scale, quat, rgba must be Float32Array")
             .ThrowAsJavaScriptException();
         return env.Null();
