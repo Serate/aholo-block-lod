@@ -6,6 +6,7 @@
 #include <node/api_webp.h>
 #include <node/api_rad_decode.h>
 #include <node/api_lod_tree.h>
+#include <node/api_rad_encode.h>
 
 namespace {
 struct InstanceData {
@@ -19,6 +20,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("decodeRad", Napi::Function::New(env, node_api::rad::decodeRad));
     exports.Set("traverseBlock", Napi::Function::New(env, node_api::rad::traverseBlock));
     exports.Set("buildLodTree", Napi::Function::New(env, node_api::lod_tree::buildLodTree));
+    exports.Set("encodeRad", Napi::Function::New(env, node_api::rad_encode::encodeRad));
     exports.Set("webp_encode_rgba", Napi::Function::New(env, node_api::imaging::webp_encode_rgba));
     exports.Set("webp_encode_rgba_lossless", Napi::Function::New(env, node_api::imaging::webp_encode_rgba_lossless));
     exports.Set("webp_decode_rgba", Napi::Function::New(env, node_api::imaging::webp_decode_rgba));

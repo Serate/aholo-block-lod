@@ -5,38 +5,28 @@ import { getNativePackageName } from './utils.js';
 
 declare namespace NativeModule {
     interface SplatLodResult {
-        /**
-         * block bounding box, blocks.
-         */
         blockBoxes: Buffer;
-        /**
-         * size, blocks * levels, splat reference index of block's level, level orders.
-         * eg. [b0_l0, b0_l1, b0_l2, ....]
-         */
         blockRefs: Buffer;
-        /**
-         * each splat gaussian count.
-         */
         gaussianCount: Buffer;
-        /**
-         * splat data table
-         */
         data: Float32Array[];
     }
 
     interface SplatSplitResult {
-        /**
-         * block bounding box, blocks.
-         */
         blockBoxes: Buffer;
-        /**
-         * each splat gaussian count.
-         */
         gaussianCount: Buffer;
-        /**
-         * splat data table
-         */
         data: Float32Array[];
+    }
+
+    interface BuildLodTreeResult {
+        center: Float32Array;
+        scale: Float32Array;
+        quat: Float32Array;
+        rgba: Float32Array;
+        sh: Float32Array | null;
+        childStart: Uint32Array;
+        childCount: Uint16Array;
+        treeNodeCount: number;
+        gsCount: number;
     }
 
     class ThreadPool {
@@ -56,6 +46,27 @@ declare namespace NativeModule {
             threadPool: ThreadPool,
         ): SplatLodResult;
         split_splat(data: Buffer[], shSize: number, blockPrecision: number, threadPool: ThreadPool): SplatSplitResult;
+        buildLodTree(
+            center: Float32Array,
+            scale: Float32Array,
+            quat: Float32Array,
+            rgba: Float32Array,
+            sh: Float32Array | null,
+            count: number,
+            shDegree: number,
+            multipliers?: Float32Array,
+        ): BuildLodTreeResult;
+        encodeRad(
+            center: Float32Array,
+            scale: Float32Array,
+            quat: Float32Array,
+            rgba: Float32Array,
+            sh: Float32Array | null,
+            childStart: Uint32Array | null,
+            childCount: Uint16Array | null,
+            count: number,
+            shDegree: number,
+        ): Buffer;
         webp_encode_rgba(color: Buffer, width: number, height: number, quality: number): Buffer;
         webp_encode_rgba_lossless(color: Buffer, width: number, height: number): Buffer;
         webp_decode_rgba(data: Buffer): {
@@ -103,6 +114,8 @@ const getModule = (function () {
         return m!;
     };
 })();
+
+export { getModule };
 
 const [defaultThreadPool, smallThreadPool] = (function () {
     let defaultTheadPool: NativeModule.ThreadPool | undefined;

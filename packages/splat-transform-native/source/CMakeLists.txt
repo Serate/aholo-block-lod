@@ -32,6 +32,7 @@ list(APPEND BINDING_SOURCE_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/node/api_avif.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/node/api_rad_decode.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/node/api_lod_tree.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/node/api_rad_encode.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/node/binding.cpp"
 )
 list(APPEND BINDING_HEADER_FILES
@@ -54,6 +55,7 @@ list(APPEND BINDING_HEADER_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/include/node/api_avif.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/node/api_rad_decode.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/node/api_lod_tree.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/node/api_rad_encode.h"
 )
 target_sources(${PROJECT_NAME}
 PRIVATE

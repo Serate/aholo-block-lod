@@ -63,6 +63,11 @@ export class WriteTask extends BaseTask<Config> {
                 fs.writeFileSync(filepath, content);
                 continue;
             }
+            if (content instanceof Buffer) {
+                logger.info(`- ${filepath} (${idx++}/${totals})`, true);
+                fs.writeFileSync(filepath, content);
+                continue;
+            }
             const type = detectSplatFileType(filepath);
             if (type === SplatFileType.SOG) {
                 sogList.push({ name, content: content as SplatData });
@@ -71,7 +76,7 @@ export class WriteTask extends BaseTask<Config> {
             logger.info(`- ${filepath} (${idx++}/${totals})`, true);
             const promise = writeSplatFile(
                 filepath,
-                content,
+                content as SplatData,
                 enableMortonSort && !preserveOrder,
                 compressLevel,
                 spzVersion,

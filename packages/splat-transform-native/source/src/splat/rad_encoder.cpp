@@ -260,6 +260,126 @@ static std::string build_chunk_meta_json(
 }
 
 // ---------------------------------------------------------------------------
+// encode a single chunk → full RADC buffer
+// ---------------------------------------------------------------------------
+struct ChunkResult {
+    std::vector<uint8_t> data;  // complete RADC chunk (header + payload)
+    uint32_t bytes;             // total chunk bytes
+    uint32_t payload_bytes;     // compressed payload size
+};
+
+static ChunkResult encode_one_chunk(
+    const float* center,
+    const float* scale,
+    const float* quat,
+    const float* rgba,
+    const float* sh,
+    const uint32_t* child_start,
+    const uint16_t* child_count,
+    size_t base,
+    size_t cnt,
+    int sh_degree,
+    bool has_lod
+) {
+    struct PropInfo { std::string name; std::string encoding; std::vector<uint8_t> compressed; uint32_t offset; };
+    std::vector<PropInfo> props;
+
+    // center: F32LeBytes
+    {
+        auto raw = encode_f32_lebytes(center + base * 3, 3, cnt);
+        props.push_back({"center", "F32LeBytes", gzip_compress(raw), 0});
+    }
+    // alpha: R8
+    {
+        float max_alpha = has_lod ? 2.0f : 1.0f;
+        std::vector<float> alphas(cnt);
+        for (size_t i = 0; i < cnt; i++) alphas[i] = rgba[(base + i) * 4 + 3];
+        auto raw = encode_r8(alphas.data(), 1, cnt, 0, max_alpha);
+        props.push_back({"alpha", "R8", gzip_compress(raw), 0});
+    }
+    // rgb: R8Delta
+    {
+        std::vector<float> rgb(cnt * 3);
+        for (size_t i = 0; i < cnt; i++) {
+            rgb[i * 3]     = rgba[(base + i) * 4];
+            rgb[i * 3 + 1] = rgba[(base + i) * 4 + 1];
+            rgb[i * 3 + 2] = rgba[(base + i) * 4 + 2];
+        }
+        auto raw = encode_r8_delta(rgb.data(), 3, cnt, 0, 1);
+        props.push_back({"rgb", "R8Delta", gzip_compress(raw), 0});
+    }
+    // scale: Ln0R8
+    {
+        auto raw = encode_ln0r8(scale + base * 3, 3, cnt, -12, 9);
+        props.push_back({"scale", "Ln0R8", gzip_compress(raw), 0});
+    }
+    // quat: Oct88R8
+    {
+        auto raw = encode_quat_oct88r8(quat + base * 4, cnt);
+        props.push_back({"quat", "Oct88R8", gzip_compress(raw), 0});
+    }
+    // sh (simplified: S8 for all bands)
+    if (sh && sh_degree > 0) {
+        size_t sh_stride = 3;
+        if (sh_degree >= 1) sh_stride += 3;
+        if (sh_degree >= 2) sh_stride += 5;
+        if (sh_degree >= 3) sh_stride += 7;
+        auto raw = encode_s8(sh + base * sh_stride, sh_stride, cnt, 1.0f);
+        props.push_back({"sh", "S8", gzip_compress(raw), 0});
+    }
+    // child_count / child_start (LOD tree metadata)
+    if (has_lod && child_count) {
+        auto raw = encode_u16(child_count + base, 1, cnt);
+        props.push_back({"child_count", "U16", gzip_compress(raw), 0});
+    }
+    if (has_lod && child_start) {
+        auto raw = encode_u32(child_start + base, 1, cnt);
+        props.push_back({"child_start", "U32", gzip_compress(raw), 0});
+    }
+
+    // Compute payload layout: each prop is at an 8-byte-aligned offset
+    uint32_t payload_off = 0;
+    for (auto& p : props) {
+        p.offset = payload_off;
+        payload_off += (uint32_t)p.compressed.size();
+        payload_off = (payload_off + 7) & ~7u;  // pad to 8 bytes
+    }
+    uint32_t payload_bytes = payload_off;
+
+    // Build chunk meta JSON with property offsets
+    std::ostringstream cmj;
+    cmj << "{\"properties\":[";
+    for (size_t i = 0; i < props.size(); i++) {
+        if (i > 0) cmj << ",";
+        cmj << "{\"property\":\"" << props[i].name
+            << "\",\"encoding\":\"" << props[i].encoding
+            << "\",\"bytes\":" << props[i].compressed.size()
+            << ",\"offset\":" << props[i].offset << "}";
+    }
+    cmj << "]}";
+    auto chunk_meta = cmj.str();
+
+    // Build RADC buffer:
+    // [magic:4][meta_len:4][meta_json:variable][padding][payload_size:8][payload:variable]
+    std::vector<uint8_t> buf;
+    write_u32_le(buf, RAD_CHUNK_MAGIC);
+    write_u32_le(buf, (uint32_t)chunk_meta.size());
+    buf.insert(buf.end(), chunk_meta.begin(), chunk_meta.end());
+    padding8(buf);
+    write_u64_le(buf, payload_bytes);
+    for (auto& p : props) {
+        buf.insert(buf.end(), p.compressed.begin(), p.compressed.end());
+        padding8(buf);
+    }
+
+    ChunkResult cr;
+    cr.data = std::move(buf);
+    cr.bytes = (uint32_t)cr.data.size();
+    cr.payload_bytes = payload_bytes;
+    return cr;
+}
+
+// ---------------------------------------------------------------------------
 // main entry point
 // ---------------------------------------------------------------------------
 std::vector<uint8_t> encode_rad(
@@ -273,143 +393,30 @@ std::vector<uint8_t> encode_rad(
     size_t count,
     int sh_degree
 ) {
-    std::vector<uint8_t> out;
     size_t num_chunks = (count + CHUNK_SIZE - 1) / CHUNK_SIZE;
     bool has_lod = (child_start != nullptr && child_count != nullptr);
 
-    // ---- encode header ----
-    write_u32_le(out, RAD_MAGIC);
-    auto meta_json = build_meta_json(count, sh_degree, has_lod, num_chunks);
-    uint32_t meta_len = (uint32_t)meta_json.size();
-    write_u32_le(out, meta_len);
-    out.insert(out.end(), meta_json.begin(), meta_json.end());
-    padding8(out);
-    uint64_t header_end = out.size();
-
-    // ---- compute per-chunk offsets (need to know sizes to fill meta) ----
-    // We encode each chunk, record sizes, then go back to fill chunk table
-    struct ChunkInfo { uint64_t offset; uint32_t bytes; };
+    // ---- first pass: encode all chunks to compute sizes ----
+    struct ChunkInfo {
+        std::vector<uint8_t> data;
+        uint64_t offset;  // relative to end of header
+        uint32_t bytes;
+    };
     std::vector<ChunkInfo> chunks(num_chunks);
 
     for (size_t ci = 0; ci < num_chunks; ci++) {
         size_t base = ci * CHUNK_SIZE;
         size_t cnt = std::min(CHUNK_SIZE, count - base);
-
-        // Encode all properties
-        struct PropData { std::string name; std::string encoding; std::vector<uint8_t> compressed; };
-        std::vector<PropData> props;
-
-        // center: F32LeBytes
-        {
-            auto raw = encode_f32_lebytes(center + base * 3, 3, cnt);
-            props.push_back({"center", "F32LeBytes", gzip_compress(raw)});
-        }
-        // alpha: R8
-        {
-            float max_alpha = has_lod ? 2.0f : 1.0f;
-            std::vector<float> alphas(cnt);
-            for (size_t i = 0; i < cnt; i++) alphas[i] = rgba[(base + i) * 4 + 3];
-            float mn = 0, mx = max_alpha;
-            auto raw = encode_r8(alphas.data(), 1, cnt, mn, mx);
-            props.push_back({"alpha", "R8", gzip_compress(raw)});
-        }
-        // rgb: R8Delta
-        {
-            std::vector<float> rgb(cnt * 3);
-            for (size_t i = 0; i < cnt; i++) {
-                rgb[i * 3] = rgba[(base + i) * 4];
-                rgb[i * 3 + 1] = rgba[(base + i) * 4 + 1];
-                rgb[i * 3 + 2] = rgba[(base + i) * 4 + 2];
-            }
-            float mn = 0, mx = 1;
-            auto raw = encode_r8_delta(rgb.data(), 3, cnt, mn, mx);
-            props.push_back({"rgb", "R8Delta", gzip_compress(raw)});
-        }
-        // scale: Ln0R8
-        {
-            float ln_min = -12, ln_max = 9;
-            auto raw = encode_ln0r8(scale + base * 3, 3, cnt, ln_min, ln_max);
-            props.push_back({"scale", "Ln0R8", gzip_compress(raw)});
-        }
-        // quat: Oct88R8
-        {
-            auto raw = encode_quat_oct88r8(quat + base * 4, cnt);
-            props.push_back({"quat", "Oct88R8", gzip_compress(raw)});
-        }
-        // sh
-        if (sh && sh_degree > 0) {
-            size_t sh_stride = 3 + (sh_degree >= 1 ? 3 : 0) + (sh_degree >= 2 ? 5 : 0) + (sh_degree >= 3 ? 7 : 0);
-            // Simplified: actual Spark code has per-degree encoding
-            auto raw = encode_s8(sh + base * sh_stride, sh_stride, cnt, 1.0f);
-            props.push_back({"sh", "S8", gzip_compress(raw)});
-        }
-        // child_count
-        if (has_lod) {
-            auto raw = encode_u16(child_count + base, 1, cnt);
-            props.push_back({"child_count", "U16", gzip_compress(raw)});
-        }
-        // child_start
-        if (has_lod) {
-            auto raw = encode_u32(child_start + base, 1, cnt);
-            props.push_back({"child_start", "U32", gzip_compress(raw)});
-        }
-
-        // Compute chunk header: RADC + chunk meta + payload bytes
-        // First compute payload layout
-        uint32_t payload_offset = 0;
-        for (auto& p : props) {
-            // Update the offset in the meta JSON
-            p.encoding = p.encoding; // placeholder - we just need bytes
-        }
-        // Build chunk meta JSON with actual offset/bytes
-        std::vector<std::pair<const char*, std::pair<const char*, size_t>>> prop_infos;
-        for (auto& p : props) {
-            prop_infos.push_back({p.name.c_str(), {p.encoding.c_str(), p.compressed.size()}});
-        }
-
-        // Write RADC chunk header
-        uint64_t chunk_start = out.size();
-        write_u32_le(out, RAD_CHUNK_MAGIC);
-        // Write meta JSON
-        auto chunk_meta_json = build_chunk_meta_json(prop_infos);
-        uint32_t cm_len = (uint32_t)chunk_meta_json.size();
-        write_u32_le(out, cm_len);
-        out.insert(out.end(), chunk_meta_json.begin(), chunk_meta_json.end());
-        padding8(out);
-        uint64_t payload_start = out.size() - chunk_start;
-        // Write payload size placeholder
-        uint64_t payload_start_pos = out.size();
-        write_u64_le(out, 0);
-        payload_start = out.size() - chunk_start;
-
-        // Write payload
-        uint32_t actual_offset = 0;
-        for (size_t pi = 0; pi < props.size(); pi++) {
-            auto& p = props[pi];
-            out.insert(out.end(), p.compressed.begin(), p.compressed.end());
-            padding8(out);
-            // We can't easily go back to fix meta JSON offsets now.
-            // For simplicity we skip writing per-property offset/bytes and rely
-            // on the order in the meta JSON being the same as the order in the payload.
-            actual_offset += (uint32_t)p.compressed.size();
-            actual_offset = (actual_offset + 7) & ~7;
-        }
-
-        // Fix payload size
-        uint64_t actual_payload_size = out.size() - (chunk_start + payload_start);
-        uint64_t payload_size_pos = chunk_start + payload_start - 8;
-        uint64_t saved = out.size();
-        out.resize(payload_size_pos);
-        write_u64_le(out, actual_payload_size);
-        out.resize(saved);
-
-        // Fix chunk info (placeholder offset, will fill after all chunks are done)
-        chunks[ci].offset = chunk_start - header_end;
-        chunks[ci].bytes = (uint32_t)(out.size() - chunk_start);
+        auto cr = encode_one_chunk(
+            center, scale, quat, rgba, sh,
+            child_start, child_count,
+            base, cnt, sh_degree, has_lod
+        );
+        chunks[ci].data = std::move(cr.data);
+        chunks[ci].bytes = cr.bytes;
     }
 
-    // Fix chunk table in header meta JSON
-    // Rebuild meta with proper offsets + bytes
+    // ---- build header meta JSON with correct chunk table ----
     std::ostringstream j;
     j << "{\n";
     j << "  \"version\": 1,\n";
@@ -419,10 +426,17 @@ std::vector<uint8_t> encode_rad(
     if (has_lod) j << "  \"lodTree\": true,\n";
     j << "  \"chunkSize\": " << CHUNK_SIZE << ",\n";
     j << "  \"chunks\": [\n";
-    for (size_t i = 0; i < chunks.size(); i++) {
+
+    // Chunk offsets are relative to the end of the header (after padding)
+    // We compute them by walking: header_size + all previous chunk sizes
+    uint64_t hdr_est = 256 + (num_chunks * 80) + j.tellp();  // rough estimate
+    uint64_t chunk_cursor = 0;
+    for (size_t i = 0; i < num_chunks; i++) {
         if (i > 0) j << ",\n";
-        j << "    { \"offset\": " << chunks[i].offset << ", \"bytes\": " << chunks[i].bytes << " }";
+        // Write placeholder offset for now, we'll compute actual offsets below
+        j << "    { \"offset\": 0, \"bytes\": " << chunks[i].bytes << " }";
     }
+
     j << "\n  ],\n";
     j << "  \"splatEncoding\": {\n";
     j << "    \"rgbMin\": 0.0,\n";
@@ -435,18 +449,71 @@ std::vector<uint8_t> encode_rad(
     j << "    \"sh3Max\": 1.0\n";
     j << "  }\n";
     j << "}\n";
-    auto final_meta = j.str();
+    auto meta_json = j.str();
 
-    // Overwrite header meta
-    // Header starts at offset 4 (after magic)
-    out.resize(0); // clear and rewrite entire file
+    // ---- compute header size and chunk offsets ----
+    // Header = magic(4) + meta_len(4) + meta_json(variable) + padding(0-7)
+    size_t hdr_base = 8 + meta_json.size();
+    size_t hdr_pad = (8 - (hdr_base & 7)) & 7;
+    size_t hdr_size = hdr_base + hdr_pad;
+
+    // Compute chunk offsets relative to end of header
+    uint64_t running_offset = 0;
+    for (size_t i = 0; i < num_chunks; i++) {
+        chunks[i].offset = running_offset;
+        running_offset += chunks[i].bytes;
+        running_offset = (running_offset + 7) & ~7ull;  // pad chunk to 8 bytes
+    }
+
+    // Rebuild meta with correct offsets
+    std::ostringstream j2;
+    j2 << "{\n";
+    j2 << "  \"version\": 1,\n";
+    j2 << "  \"type\": \"gsplat\",\n";
+    j2 << "  \"count\": " << count << ",\n";
+    if (sh_degree > 0) j2 << "  \"maxSh\": " << sh_degree << ",\n";
+    if (has_lod) j2 << "  \"lodTree\": true,\n";
+    j2 << "  \"chunkSize\": " << CHUNK_SIZE << ",\n";
+    j2 << "  \"chunks\": [\n";
+    for (size_t i = 0; i < num_chunks; i++) {
+        if (i > 0) j2 << ",\n";
+        j2 << "    { \"offset\": " << chunks[i].offset << ", \"bytes\": " << chunks[i].bytes << " }";
+    }
+    j2 << "\n  ],\n";
+    j2 << "  \"splatEncoding\": {\n";
+    j2 << "    \"rgbMin\": 0.0,\n";
+    j2 << "    \"rgbMax\": 1.0,\n";
+    if (has_lod) j2 << "    \"lodOpacity\": true,\n";
+    j2 << "    \"lnScaleMin\": -12.0,\n";
+    j2 << "    \"lnScaleMax\": 9.0,\n";
+    j2 << "    \"sh1Max\": 1.0,\n";
+    j2 << "    \"sh2Max\": 1.0,\n";
+    j2 << "    \"sh3Max\": 1.0\n";
+    j2 << "  }\n";
+    j2 << "}\n";
+    auto final_meta = j2.str();
+
+    // Compute final header size with correct meta
+    hdr_base = 8 + final_meta.size();
+    hdr_pad = (8 - (hdr_base & 7)) & 7;
+    hdr_size = hdr_base + hdr_pad;
+
+    // ---- write final output ----
+    std::vector<uint8_t> out;
+    out.reserve(hdr_size + running_offset);
     write_u32_le(out, RAD_MAGIC);
     write_u32_le(out, (uint32_t)final_meta.size());
     out.insert(out.end(), final_meta.begin(), final_meta.end());
-    padding8(out);
+    out.resize(hdr_size, 0);  // zero padding
 
-    // Re-pend chunks at correct positions
-    // This is simplified - in practice the encoder should compute offsets first then write once
+    // Append all chunks (aligned)
+    for (size_t ci = 0; ci < num_chunks; ci++) {
+        out.insert(out.end(), chunks[ci].data.begin(), chunks[ci].data.end());
+        if (ci + 1 < num_chunks) {
+            // Pad to 8-byte alignment between chunks
+            while (out.size() & 7) out.push_back(0);
+        }
+    }
 
     return out;
 }

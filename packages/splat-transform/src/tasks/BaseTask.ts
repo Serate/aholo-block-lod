@@ -3,7 +3,7 @@ import type { Logger } from '../utils/Logger.js';
 
 export interface SingleFile {
     name: string;
-    content: SplatData | string;
+    content: SplatData | string | Buffer;
     preserveOrder?: boolean;
 }
 
