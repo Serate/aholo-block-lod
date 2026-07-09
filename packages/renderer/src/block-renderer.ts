@@ -10,10 +10,10 @@ import { BlockTree } from './block-tree.js';
  *
  * Usage:
  *   const renderer = new BlockLodRenderer();
- *   renderer.init(lodMeta, texturePool);  // from lod-meta.json
+ *   renderer.traverseFn = native.traverseBlock;
  *
- *   // Each frame, before SplattingPlugin.updateEffect():
- *   renderer.update(cameraPos, splattingPlugin);
+ *   // Each frame:
+ *   renderer.update(cameraPos);
  */
 export class BlockLodRenderer {
     readonly blockManager: BlockManager;
@@ -44,33 +44,29 @@ export class BlockLodRenderer {
 
     /**
      * Per-frame update. Call BEFORE SplattingPlugin.updateEffect().
-     *
-     * @param cameraPos World-space camera position.
-     * @param splattingPlugin The SplattingPlugin instance to set external order on.
-     * @param lodScale LOD scale factor (default 1.0).
-     * @param pixelScaleLimit Pixel scale threshold (default 0.001).
-     * @param maxSplatsPerBlock Max GS output per block traversal (default 500000).
+     * Uses the global SplattingPlugin reference if plugin not specified.
      */
     update(
         cameraPos: Vector3,
-        splattingPlugin: __INTERNAL__.SplattingPlugin,
+        splattingPlugin?: __INTERNAL__.SplattingPlugin,
         lodScale = 1.0,
         pixelScaleLimit = 0.001,
         maxSplatsPerBlock = 500000,
     ): void {
         if (!this.traverseFn) return;
 
+        const plugin = splattingPlugin ?? __INTERNAL__.getSplattingPlugin();
+        if (!plugin) return;
+
         this.texturePool.newFrame();
 
-        // Phase 1: evaluate block lifecycle
         const activeBlockIds = this.blockManager.update(cameraPos);
 
         if (activeBlockIds.length === 0) {
-            splattingPlugin.setExternalOrder(new Uint32Array(0), 0);
+            plugin.setExternalOrder(new Uint32Array(0), 0);
             return;
         }
 
-        // Phase 2: traverse active blocks
         const camPosArray = new Float32Array([cameraPos.x, cameraPos.y, cameraPos.z]);
         const { order, totalSplats } = this.blockTree.traverse(
             activeBlockIds,
@@ -81,7 +77,6 @@ export class BlockLodRenderer {
             this.traverseFn,
         );
 
-        // Phase 3: feed into SplattingPlugin
-        splattingPlugin.setExternalOrder(order, totalSplats);
+        plugin.setExternalOrder(order, totalSplats);
     }
 }
