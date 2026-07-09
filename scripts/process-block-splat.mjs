@@ -152,6 +152,31 @@ for (let bi = 0; bi < blockRanges.length; bi++) {
         }
     }
 
+    // Write .splat file from the original GS data (before tree construction)
+    console.time(`  writeSplat ${bi}`);
+    const ITEM = 32;
+    const splatBuf = Buffer.alloc(count * ITEM);
+    for (let j = 0; j < count; j++) {
+        const o = j * ITEM;
+        splatBuf.writeFloatLE(bc[j * 3],     o);
+        splatBuf.writeFloatLE(bc[j * 3 + 1], o + 4);
+        splatBuf.writeFloatLE(bc[j * 3 + 2], o + 8);
+        splatBuf.writeFloatLE(bs[j * 3],     o + 12);
+        splatBuf.writeFloatLE(bs[j * 3 + 1], o + 16);
+        splatBuf.writeFloatLE(bs[j * 3 + 2], o + 20);
+        splatBuf[o + 24] = Math.round(br[j * 4] * 255);
+        splatBuf[o + 25] = Math.round(br[j * 4 + 1] * 255);
+        splatBuf[o + 26] = Math.round(br[j * 4 + 2] * 255);
+        splatBuf[o + 27] = Math.round(br[j * 4 + 3] * 255);
+        splatBuf[o + 28] = Math.min(255, Math.max(0, Math.round(bq[j * 4 + 3] * 128 + 128))); // qw
+        splatBuf[o + 29] = Math.min(255, Math.max(0, Math.round(bq[j * 4] * 128 + 128)));     // qx
+        splatBuf[o + 30] = Math.min(255, Math.max(0, Math.round(bq[j * 4 + 1] * 128 + 128))); // qy
+        splatBuf[o + 31] = Math.min(255, Math.max(0, Math.round(bq[j * 4 + 2] * 128 + 128))); // qz
+    }
+    const splatName = `block_${bi}.splat`;
+    writeFileSync(join(outDir, splatName), splatBuf);
+    console.timeEnd(`  writeSplat ${bi}`);
+
     // Build LOD tree
     console.time(`  buildTree ${bi}`);
     const tree = native.buildLodTree(bc, bs, bq, br, null, count, 0, multipliers);
@@ -185,7 +210,7 @@ const lodMeta = {
     counts: numGs,
     shDegree: 0,
     levels: 5,
-    files: outputBlocks.map(b => `block_${b.file}.rad`),
+    files: outputBlocks.map(b => `block_${b.file}.splat`),
     tree: outputBlocks.map(b => ({
         bound: b.bound,
         file: b.file,

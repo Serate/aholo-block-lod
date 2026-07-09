@@ -1,0 +1,44 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { locales, type Locale } from '../../i18n/locales.js';
+export function getStaticPaths() {
+  return locales.map(locale => ({ params: { lang: locale.code }, props: { lang: locale.code } }));
+}
+interface Props { lang: Locale }
+const { lang } = Astro.props;
+---
+<BaseLayout lang={lang} title="Block Viewer" pageClass="workspace-page viewer-page" workspaceFullscreen>
+  <main style="width:100%;height:100vh;position:relative;background:#000">
+    <div id="viewport" style="width:100%;height:100%"></div>
+    <div id="info" style="position:absolute;top:12px;left:12px;color:#fff;font:13px/1.6 system-ui;pointer-events:none;z-index:10"><div id="sStatus">Loading...</div></div>
+  </main>
+  <script type="module">
+    import { createViewer, Scene3D, PerspectiveCamera, Vector3, SplatLoader } from '@manycore/aholo-viewer';
+    const { SplatFileType, SplatPackType, parseSplatData } = SplatLoader;
+
+    async function init() {
+      const root = document.getElementById('viewport');
+      const viewer = createViewer('block-viewer', root, { rendering: { backend: 'webgl2' } });
+      const scene = new Scene3D(); viewer.setScene(scene);
+      const camera = new PerspectiveCamera(60, root.clientWidth / root.clientHeight, 0.1, 10000);
+      scene.add(camera); viewer.setActiveCamera(camera);
+
+      const meta = await (await fetch('/block-data/lod-meta.json')).json();
+      const status = document.getElementById('sStatus');
+      status.textContent = `Loading ${meta.tree.length} blocks (${meta.counts} GS)...`;
+
+      for (let bi = 0; bi < meta.tree.length; bi++) {
+        status.textContent = `Loading block ${bi+1}/${meta.tree.length}...`;
+        const data = await parseSplatData(SplatFileType.Splat, '/block-data/' + meta.files[bi], SplatPackType.Raw);
+        const { createSplat } = await import('@manycore/aholo-viewer');
+        scene.add(createSplat(data));
+      }
+
+      camera.position.set(15, 10, 20);
+      camera.lookAt(new Vector3(0, 0, 0));
+      status.textContent = `Loaded ${meta.tree.length} blocks, ${meta.counts} GS`;
+      scene.notifySceneChange();
+    }
+    init().catch(e => { document.getElementById('sStatus').textContent = e.message; });
+  </script>
+</BaseLayout>
