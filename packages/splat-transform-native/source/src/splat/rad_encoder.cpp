@@ -39,27 +39,37 @@ static void padding8(std::vector<uint8_t>& buf) {
 
 static std::vector<uint8_t> gzip_compress(const std::vector<uint8_t>& data) {
     if (data.empty()) return {};
-
-    // Use zlib's deflate with gzip wrapper (windowBits = 15 + 16 = 31)
+    // Tag byte: 0=raw, 1=raw deflate
+    if (data.size() < 256) {
+        std::vector<uint8_t> out(1 + data.size());
+        out[0] = 0;
+        std::memcpy(out.data() + 1, data.data(), data.size());
+        return out;
+    }
+    // Raw deflate (windowBits = -MAX_WBITS = -15)
     z_stream strm = {};
-    if (deflateInit2(&strm, Z_BEST_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
-        return data;
+    if (deflateInit2(&strm, Z_BEST_COMPRESSION, Z_DEFLATED, -MAX_WBITS, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
+        std::vector<uint8_t> out(1 + data.size());
+        out[0] = 0; std::memcpy(out.data() + 1, data.data(), data.size());
+        return out;
     }
-
-    uLong bound = deflateBound(&strm, data.size());
-    std::vector<uint8_t> out(bound);
-    strm.next_in = const_cast<Bytef*>(data.data());
+    uLong bound = deflateBound(&strm, (uLong)data.size());
+    std::vector<uint8_t> comp(bound);
+    strm.next_in = (Bytef*)data.data();
     strm.avail_in = (uInt)data.size();
-    strm.next_out = out.data();
-    strm.avail_out = (uInt)out.size();
-
+    strm.next_out = comp.data();
+    strm.avail_out = (uInt)comp.size();
     int ret = deflate(&strm, Z_FINISH);
-    if (ret != Z_STREAM_END) {
-        deflateEnd(&strm);
-        return data;
+    if (ret != Z_STREAM_END) { deflateEnd(&strm);
+        std::vector<uint8_t> out(1 + data.size());
+        out[0] = 0; std::memcpy(out.data() + 1, data.data(), data.size());
+        return out;
     }
-    out.resize(strm.total_out);
+    comp.resize(strm.total_out);
     deflateEnd(&strm);
+    std::vector<uint8_t> out(1 + comp.size());
+    out[0] = 1;
+    std::memcpy(out.data() + 1, comp.data(), comp.size());
     return out;
 }
 
@@ -342,14 +352,20 @@ static ChunkResult encode_one_chunk(
         auto raw = encode_s8(sh + base * sh_stride, sh_stride, cnt, 1.0f);
         props.push_back({"sh", "S8", gzip_compress(raw), 0});
     }
-    // child_count / child_start (LOD tree metadata)
+    // child_count / child_start — raw (tag=0), no compression
     if (has_lod && child_count) {
         auto raw = encode_u16(child_count + base, 1, cnt);
-        props.push_back({"child_count", "U16", gzip_compress(raw), 0});
+        std::vector<uint8_t> stored(1 + raw.size());
+        stored[0] = 0;
+        std::memcpy(stored.data() + 1, raw.data(), raw.size());
+        props.push_back({"child_count", "U16", std::move(stored), 0});
     }
     if (has_lod && child_start) {
         auto raw = encode_u32(child_start + base, 1, cnt);
-        props.push_back({"child_start", "U32", gzip_compress(raw), 0});
+        std::vector<uint8_t> stored(1 + raw.size());
+        stored[0] = 0;
+        std::memcpy(stored.data() + 1, raw.data(), raw.size());
+        props.push_back({"child_start", "U32", std::move(stored), 0});
     }
 
     // Compute payload layout: each prop is at an 8-byte-aligned offset

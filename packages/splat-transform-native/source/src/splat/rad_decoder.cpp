@@ -11,6 +11,10 @@ static uint32_t read_u32_le(const uint8_t* p) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
+static uint16_t read_u16_le(const uint8_t* p) {
+    return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+}
+
 static uint64_t read_u64_le(const uint8_t* p) {
     return (uint64_t)read_u32_le(p) | ((uint64_t)read_u32_le(p + 4) << 32);
 }
@@ -126,54 +130,43 @@ static RadMeta parse_meta(const uint8_t* data, size_t size) {
 }
 
 static std::vector<uint8_t> decompress_gzip(const uint8_t* data, size_t size) {
-    if (size < 18 || data[0] != 0x1F || data[1] != 0x8B) {
-        return {data, data + size};
+    if (size < 1) return {};
+    // Tag byte: 0=raw, 1=raw deflate
+    uint8_t tag = data[0];
+    if (tag == 0) {
+        // Raw (uncompressed)
+        return {data + 1, data + size};
     }
-
-    size_t hdr = 10;
-    if (data[3] & 0x04) { hdr += 2 + (size_t)data[12] + (size_t)data[13] * 256; }
-    if (data[3] & 0x08) { while (hdr < size && data[hdr] != 0) hdr++; hdr++; }
-    if (data[3] & 0x10) { while (hdr < size && data[hdr] != 0) hdr++; hdr++; }
-    if (data[3] & 0x02) { hdr += 2; }
-
-    const uint8_t* in = data + hdr;
-    size_t in_len = size - hdr - 8;
-    if (in_len <= 0) return {data, data + size};
-
-    // Use zlib inflate (raw deflate)
-    z_stream strm = {};
-    strm.next_in = (Bytef*)in;
-    strm.avail_in = (uInt)in_len;
-
-    // Window bits = -15 means raw inflate (no zlib header)
-    if (inflateInit2(&strm, -15) != Z_OK) {
-        return {data, data + size};
-    }
-
-    std::vector<uint8_t> out;
-    out.resize(in_len * 4);
-    strm.next_out = out.data();
-    strm.avail_out = (uInt)out.size();
-
-    int ret = inflate(&strm, Z_FINISH);
-    if (ret != Z_STREAM_END) {
-        // Try larger buffer
-        size_t total = out.size();
-        while (ret != Z_STREAM_END && total < in_len * 16) {
-            total *= 2;
-            out.resize(total);
+    if (tag == 1) {
+        // Raw deflate
+        z_stream strm = {};
+        strm.zalloc = Z_NULL; strm.zfree = Z_NULL; strm.opaque = Z_NULL;
+        if (inflateInit2(&strm, -MAX_WBITS) != Z_OK) {
+            return {data + 1, data + size};
+        }
+        strm.next_in = (Bytef*)(data + 1);
+        strm.avail_in = (uInt)(size - 1);
+        std::vector<uint8_t> out;
+        out.resize(std::max((size_t)4096, (size - 1) * 4));
+        strm.next_out = out.data();
+        strm.avail_out = (uInt)out.size();
+        int ret = inflate(&strm, Z_FINISH);
+        while ((ret == Z_OK || ret == Z_BUF_ERROR) && out.size() < (size - 1) * 32) {
+            out.resize(out.size() * 2);
             strm.next_out = out.data() + strm.total_out;
             strm.avail_out = (uInt)(out.size() - strm.total_out);
             ret = inflate(&strm, Z_FINISH);
         }
         if (ret != Z_STREAM_END) {
             inflateEnd(&strm);
-            return {data, data + size};
+            return {data + 1, data + size};
         }
+        out.resize(strm.total_out);
+        inflateEnd(&strm);
+        return out;
     }
-    out.resize(strm.total_out);
-    inflateEnd(&strm);
-    return out;
+    // Unknown tag — return raw
+    return {data, data + size};
 }
 
 RadDecodeResult decode_rad(const uint8_t* data, size_t size) {
@@ -357,7 +350,7 @@ RadDecodeResult decode_rad(const uint8_t* data, size_t size) {
                 size_t n = decomp.size() / 2;
                 if (n > total - base) n = total - base;
                 for (size_t i = 0; i < n && base + i < total; i++) {
-                    result.childCount[base + i] = (uint16_t)read_u32_le(&decomp[i * 2]);
+                    result.childCount[base + i] = read_u16_le(&decomp[i * 2]);
                 }
             }
             else if (prop.name == "child_start") {
