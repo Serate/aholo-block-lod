@@ -25,25 +25,39 @@ Napi::Value decodeRad(const Napi::CallbackInfo& info) {
     obj.Set("shDegree", (uint32_t)result.shDegree);
 
     if (!result.childStart.empty()) {
-        obj.Set("childStart", Napi::Buffer<uint32_t>::Copy(env, result.childStart.data(), result.childStart.size()));
+        auto arr = Napi::Uint32Array::New(env, result.childStart.size());
+        std::memcpy(arr.Data(), result.childStart.data(), result.childStart.size() * sizeof(uint32_t));
+        obj.Set("childStart", arr);
     }
     if (!result.childCount.empty()) {
-        obj.Set("childCount", Napi::Buffer<uint16_t>::Copy(env, result.childCount.data(), result.childCount.size()));
+        auto arr = Napi::Uint16Array::New(env, result.childCount.size());
+        std::memcpy(arr.Data(), result.childCount.data(), result.childCount.size() * sizeof(uint16_t));
+        obj.Set("childCount", arr);
     }
     if (!result.center.empty()) {
-        obj.Set("center", Napi::Buffer<uint16_t>::Copy(env, result.center.data(), result.center.size()));
+        auto arr = Napi::Uint16Array::New(env, result.center.size());
+        std::memcpy(arr.Data(), result.center.data(), result.center.size() * sizeof(uint16_t));
+        obj.Set("center", arr);
     }
     if (!result.rgba.empty()) {
-        obj.Set("rgba", Napi::Buffer<uint8_t>::Copy(env, result.rgba.data(), result.rgba.size()));
+        auto arr = Napi::Uint8Array::New(env, result.rgba.size());
+        std::memcpy(arr.Data(), result.rgba.data(), result.rgba.size() * sizeof(uint8_t));
+        obj.Set("rgba", arr);
     }
     if (!result.scale.empty()) {
-        obj.Set("scale", Napi::Buffer<uint8_t>::Copy(env, result.scale.data(), result.scale.size()));
+        auto arr = Napi::Uint8Array::New(env, result.scale.size());
+        std::memcpy(arr.Data(), result.scale.data(), result.scale.size() * sizeof(uint8_t));
+        obj.Set("scale", arr);
     }
     if (!result.quat.empty()) {
-        obj.Set("quat", Napi::Buffer<uint8_t>::Copy(env, result.quat.data(), result.quat.size()));
+        auto arr = Napi::Uint8Array::New(env, result.quat.size());
+        std::memcpy(arr.Data(), result.quat.data(), result.quat.size() * sizeof(uint8_t));
+        obj.Set("quat", arr);
     }
     if (!result.sh.empty()) {
-        obj.Set("sh", Napi::Buffer<uint8_t>::Copy(env, result.sh.data(), result.sh.size()));
+        auto arr = Napi::Uint8Array::New(env, result.sh.size());
+        std::memcpy(arr.Data(), result.sh.data(), result.sh.size() * sizeof(uint8_t));
+        obj.Set("sh", arr);
     }
 
     return obj;
