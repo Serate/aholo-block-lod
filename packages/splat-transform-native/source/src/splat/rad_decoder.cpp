@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include "zlib.h"
 
 namespace splat {
 
@@ -125,9 +126,54 @@ static RadMeta parse_meta(const uint8_t* data, size_t size) {
 }
 
 static std::vector<uint8_t> decompress_gzip(const uint8_t* data, size_t size) {
-    // Stub: returns raw data without decompression.
-    // Proper gzip support requires zlib (available via cmake-js with vcpkg).
-    return {data, data + size};
+    if (size < 18 || data[0] != 0x1F || data[1] != 0x8B) {
+        return {data, data + size};
+    }
+
+    size_t hdr = 10;
+    if (data[3] & 0x04) { hdr += 2 + (size_t)data[12] + (size_t)data[13] * 256; }
+    if (data[3] & 0x08) { while (hdr < size && data[hdr] != 0) hdr++; hdr++; }
+    if (data[3] & 0x10) { while (hdr < size && data[hdr] != 0) hdr++; hdr++; }
+    if (data[3] & 0x02) { hdr += 2; }
+
+    const uint8_t* in = data + hdr;
+    size_t in_len = size - hdr - 8;
+    if (in_len <= 0) return {data, data + size};
+
+    // Use zlib inflate (raw deflate)
+    z_stream strm = {};
+    strm.next_in = (Bytef*)in;
+    strm.avail_in = (uInt)in_len;
+
+    // Window bits = -15 means raw inflate (no zlib header)
+    if (inflateInit2(&strm, -15) != Z_OK) {
+        return {data, data + size};
+    }
+
+    std::vector<uint8_t> out;
+    out.resize(in_len * 4);
+    strm.next_out = out.data();
+    strm.avail_out = (uInt)out.size();
+
+    int ret = inflate(&strm, Z_FINISH);
+    if (ret != Z_STREAM_END) {
+        // Try larger buffer
+        size_t total = out.size();
+        while (ret != Z_STREAM_END && total < in_len * 16) {
+            total *= 2;
+            out.resize(total);
+            strm.next_out = out.data() + strm.total_out;
+            strm.avail_out = (uInt)(out.size() - strm.total_out);
+            ret = inflate(&strm, Z_FINISH);
+        }
+        if (ret != Z_STREAM_END) {
+            inflateEnd(&strm);
+            return {data, data + size};
+        }
+    }
+    out.resize(strm.total_out);
+    inflateEnd(&strm);
+    return out;
 }
 
 RadDecodeResult decode_rad(const uint8_t* data, size_t size) {
