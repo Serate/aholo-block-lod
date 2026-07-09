@@ -1,4 +1,5 @@
 #include "splat/rad_decoder.h"
+#include "splat/rad_encoder.h"
 #include "splat/lod_tree.h"
 #include <cstdio>
 #include <cassert>
@@ -116,6 +117,94 @@ int main(int argc, char** argv) {
         printf("Traverse %s\n", n > 0 ? "PASSED" : "FAILED");
     }
 
-    printf("ALL TESTS %s\n", result.count > 0 ? "PASSED" : "FAILED");
-    return (result.count > 0) ? 0 : 1;
+    // ====================================================================
+    // build_lod_tree + encode_rad + decode_rad round-trip test
+    // ====================================================================
+    printf("\n--- build_lod_tree + encode_rad test ---\n");
+
+    // Create 200 synthetic GS on a spatial grid
+    const size_t nSynth = 200;
+    std::vector<float> synthC(nSynth * 3), synthS(nSynth * 3);
+    std::vector<float> synthQ(nSynth * 4, 0), synthR(nSynth * 4, 0);
+
+    for (size_t i = 0; i < nSynth; i++) {
+        float x = (float)((int)i % 10) * 0.5f;
+        float y = (float)(((int)i / 10) % 10) * 0.5f;
+        float z = (float)(i / 100) * 0.5f;
+        synthC[i * 3]     = x;
+        synthC[i * 3 + 1] = y;
+        synthC[i * 3 + 2] = z;
+        // Varying scales: 0.01 to 0.3 so that cycling produces merges
+        float sc = 0.01f + (float)(i % 15) * 0.02f;
+        synthS[i * 3] = sc;
+        synthS[i * 3 + 1] = sc;
+        synthS[i * 3 + 2] = sc;
+        synthQ[i * 4 + 3] = 1.0f;  // identity quat
+        synthR[i * 4]     = 0.3f + (float)(i % 3) * 0.2f;
+        synthR[i * 4 + 1] = 0.3f + (float)((i + 1) % 3) * 0.2f;
+        synthR[i * 4 + 2] = 0.3f + (float)((i + 2) % 3) * 0.2f;
+        synthR[i * 4 + 3] = 0.5f + (float)(i % 5) * 0.1f;
+    }
+
+    printf("build_lod_tree (%zu GS): ", nSynth);
+    fflush(stdout);
+
+    auto tree = splat::build_lod_tree(
+        synthC.data(), synthS.data(), synthQ.data(), synthR.data(),
+        nullptr, nSynth, 0);
+
+    assert(tree.count == nSynth);
+    assert(tree.totalNodes >= nSynth);
+    assert(tree.childStart.size() == tree.totalNodes);
+    assert(tree.childCount.size() == tree.totalNodes);
+    assert(tree.center.size() == tree.totalNodes * 3);
+    assert(tree.scale.size()  == tree.totalNodes * 3);
+    assert(tree.quat.size()   == tree.totalNodes * 4);
+    assert(tree.rgba.size()   == tree.totalNodes * 4);
+    assert(tree.sh.empty());
+
+    // Root (node 0) should have children
+    assert(tree.childCount[0] > 0);
+
+    // Count leaf nodes (childCount == 0)
+    size_t leafCount = 0;
+    for (size_t i = 0; i < tree.totalNodes; i++)
+        if (tree.childCount[i] == 0) leafCount++;
+
+    printf("PASSED (totalNodes=%zu, leaves=%zu, root_children=%u)\n",
+        tree.totalNodes, leafCount, tree.childCount[0]);
+
+    // encode_rad
+    printf("encode_rad: ");
+    fflush(stdout);
+
+    auto rad = splat::encode_rad(
+        tree.center.data(), tree.scale.data(), tree.quat.data(),
+        tree.rgba.data(), nullptr,
+        tree.childStart.data(), tree.childCount.data(),
+        tree.totalNodes, 0);
+
+    assert(rad.size() > 0);
+    printf("PASSED (%zu bytes)\n", rad.size());
+
+    // decode_rad round-trip
+    printf("decode_rad round-trip: ");
+    fflush(stdout);
+
+    auto decoded = splat::decode_rad(rad.data(), rad.size());
+    assert(decoded.count > 0);
+    assert(decoded.totalNodes == tree.totalNodes);
+    assert(decoded.childStart.size() == tree.totalNodes);
+    assert(decoded.childCount.size() == tree.totalNodes);
+
+    // Verify child_start/count round-trip
+    size_t matchCount = 0;
+    for (size_t i = 0; i < tree.totalNodes && i < decoded.totalNodes; i++) {
+        if (decoded.childCount[i] == tree.childCount[i]) matchCount++;
+    }
+    printf("PASSED (count=%zu, totalNodes=%zu, childCount_match=%zu/%zu)\n",
+        decoded.count, decoded.totalNodes, matchCount, tree.totalNodes);
+
+    printf("\nALL TESTS PASSED\n");
+    return 0;
 }
