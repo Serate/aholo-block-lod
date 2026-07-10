@@ -1,44 +1,109 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { locales, type Locale } from '../../i18n/locales.js';
+import { locales } from '../../i18n/locales.js';
 export function getStaticPaths() {
-  return locales.map(locale => ({ params: { lang: locale.code }, props: { lang: locale.code } }));
+  return locales.map(l => ({ params: { lang: l.code }, props: { lang: l.code } }));
 }
-interface Props { lang: Locale }
 const { lang } = Astro.props;
 ---
 <BaseLayout lang={lang} title="Block Viewer" pageClass="workspace-page viewer-page" workspaceFullscreen>
-  <main style="width:100%;height:100vh;position:relative;background:#000">
-    <div id="viewport" style="width:100%;height:100%"></div>
-    <div id="info" style="position:absolute;top:12px;left:12px;color:#fff;font:13px/1.6 system-ui;pointer-events:none;z-index:10"><div id="sStatus">Loading...</div></div>
-  </main>
-  <script type="module">
-    import { createViewer, Scene3D, PerspectiveCamera, Vector3, SplatLoader } from '@manycore/aholo-viewer';
-    const { SplatFileType, SplatPackType, parseSplatData } = SplatLoader;
+<main style="width:100%;height:100vh;background:#000"><div id="vp" style="width:100%;height:100%"></div>
+<div style="position:absolute;top:12px;left:12px;color:#fff;font:13px/1.6 system-ui;pointer-events:none;z-index:10" id="st">Loading...</div>
+<output style="position:absolute;bottom:12px;right:12px;color:#0f0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="fps">0</output></main>
+<script type="module">
+import { createViewer, Scene3D, PerspectiveCamera, SplatUtils, setViewerConfig, BackgroundMode, Color, Vector3 } from '@manycore/aholo-viewer';
+import { SplatLoader } from '@manycore/aholo-viewer';
+import { CameraControl } from '../../client/camera-control.js';
+import { syncCameraAspect } from '../../client/rendering.js';
+const { SplatFileType, SplatPackType, parseSplatData } = SplatLoader;
+const { createSplat } = SplatUtils;
 
-    async function init() {
-      const root = document.getElementById('viewport');
-      const viewer = createViewer('block-viewer', root, { rendering: { backend: 'webgl2' } });
-      const scene = new Scene3D(); viewer.setScene(scene);
-      const camera = new PerspectiveCamera(60, root.clientWidth / root.clientHeight, 0.1, 10000);
-      camera.position.set(15, 10, 20);
-      viewer.setCamera(camera);
-      const status = document.getElementById('sStatus');
-      const meta = await (await fetch('/block-data/lod-meta.json')).json();
-      status.textContent = `Loading ${meta.tree.length} blocks (${meta.counts} GS)...`;
+const surface = document.getElementById('vp');
+const v = createViewer('bv', surface, { antialiasing: false });
+const sc = new Scene3D(); v.setScene(sc);
+const cam = new PerspectiveCamera(60, 1, 0.1, 2000);
+cam.up.set(0, -1, 0);
+cam.position.set(0, -1.2, 3);
+cam.lookAt(new Vector3(0, 0, 0));
+cam.far = 2000;
+cam.updateProjectionMatrix();
+v.setCamera(cam);
+const control = new CameraControl(cam, surface, { enabled: true, orbitCenter: { x: 0, y: 0, z: 0 } });
 
-      for (let bi = 0; bi < meta.tree.length; bi++) {
-        status.textContent = `Loading block ${bi+1}/${meta.tree.length}...`;
-        const data = await parseSplatData(SplatFileType.Splat, '/block-data/' + meta.files[bi], SplatPackType.Raw);
-        const { createSplat } = await import('@manycore/aholo-viewer');
-        scene.add(createSplat(data));
-      }
+setViewerConfig(v, {
+  pixelRatio: 1 / window.devicePixelRatio,
+  pipeline: {
+    Background: {
+      background: { active: BackgroundMode.BasicBackground, basic: { color: new Color(0, 0, 0), alpha: 1 } },
+      ground: { enabled: false },
+    },
+    Splatting: {
+      enabled: true,
+      pack: { highPrecisionEnabled: false, precalculateEnabled: true, cameraRelativeEnabled: true, sortedLayoutEnabled: false },
+      raster: { normalizedFalloff: false, preBlurAmount: 0.3, blurAmount: 0, focalAdjustment: 2, detailCullingThreshold: 1, maxPixelRadius: 1024, maxStdDev: Math.sqrt(8) },
+      sort: { highPrecisionEnabled: false, minIntervalMs: 0, sortSplatDistance: 0.1, sortSplatCoorient: 0.99999, sortCameraDistance: 1, sortCameraCoorient: 0.99 },
+      composite: { enabled: false, highPrecisionEnabled: false },
+      toneMapping: { enabled: false, toneMapping: 'Linear', exposure: 1 },
+      highlightKernel: { enabled: false, size: 2, color: '#0000ff' },
+    },
+  },
+});
 
-      camera.position.set(15, 10, 20);
-      camera.lookAt(new Vector3(0, 0, 0));
-      status.textContent = `Loaded ${meta.tree.length} blocks, ${meta.counts} GS`;
-      scene.notifySceneChange();
-    }
-    init().catch(e => { document.getElementById('sStatus').textContent = e.message; });
-  </script>
+// FPS counter
+const fpsEl = document.getElementById('fps');
+const FPS_DISPLAY_INTERVAL_MS = 250;
+const FPS_SMOOTHING_FACTOR = 0.08;
+let fpsLastFrame = 0, fpsLastDisplay = 0, fpsSmoothed = 0;
+function updateFps() {
+  const now = performance.now();
+  if (!fpsLastFrame) { fpsLastFrame = now; fpsLastDisplay = now; return; }
+  const fd = Math.max(1, now - fpsLastFrame);
+  const fps = 1000 / fd;
+  fpsLastFrame = now;
+  fpsSmoothed = fpsSmoothed === 0 ? fps : fpsSmoothed + (fps - fpsSmoothed) * FPS_SMOOTHING_FACTOR;
+  if (now - fpsLastDisplay >= FPS_DISPLAY_INTERVAL_MS) {
+    fpsEl.textContent = String(Math.round(fpsSmoothed));
+    fpsLastDisplay = now;
+  }
+}
+
+// Render loop — render every rAF tick
+let rafId;
+let lastTime = 0;
+function frame(time) {
+  rafId = requestAnimationFrame(frame);
+  const delta = Math.min((time - lastTime) / 1000, 0.1);
+  lastTime = time;
+  const moved = control.update(delta);
+  if (moved) {
+    syncCameraAspect(cam, v);
+    sc.notifySceneChange();
+  }
+  v.render(time, cam);
+  updateFps();
+}
+rafId = requestAnimationFrame(frame);
+
+const st = document.getElementById('st');
+const meta = await (await fetch('/block-data/lod-meta.json')).json();
+st.textContent = `Loading ${meta.tree.length} blocks...`;
+
+const chunks = await Promise.all(
+  meta.files.map(f => fetch('/block-data/' + f).then(r => r.arrayBuffer()))
+);
+const totalSize = chunks.reduce((s, c) => s + c.byteLength, 0);
+const merged = new Uint8Array(totalSize);
+let off = 0;
+for (const chunk of chunks) {
+  merged.set(new Uint8Array(chunk), off);
+  off += chunk.byteLength;
+}
+const splatData = await parseSplatData(SplatFileType.SPLAT, new File([merged], 'merged.splat'), SplatPackType.SuperCompressed, { maxShDegree: 3, maxTextureSize: 8192 });
+const splat = await createSplat(splatData);
+sc.add(splat);
+
+st.textContent = `${meta.tree.length} blocks, ${meta.counts} GS`;
+sc.notifySceneChange();
+v.render(performance.now(), cam);
+</script>
 </BaseLayout>

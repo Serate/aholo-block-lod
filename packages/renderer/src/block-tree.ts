@@ -1,104 +1,78 @@
+import { type TreeData, traverseBlock, computeFeatureSizes } from './traverse-block.js';
+import { f16ToF32 } from './rad-decoder-browser.js';
+
 /**
- * Decoded block data from a .rad file, as returned by native.decodeRad.
+ * Decoded block data from a .rad file.
  */
 export interface DecodedBlock {
-    /** GS count (leaf nodes). */
     count: number;
-    /** Total tree nodes (leaves + internal). */
     totalNodes: number;
-    /** SH degree. */
     shDegree: number;
-
-    /** Tree structure: u32 × totalNodes, childStart[i] = index of first child */
     childStart: Uint32Array;
-    /** Tree structure: u16 × totalNodes, childCount[i] = number of children (0 = leaf) */
     childCount: Uint16Array;
-
-    /** GS center positions in f16[3] × totalNodes. */
     center: Uint16Array;
-    /** GS RGBA in u8[4] × totalNodes. */
     rgba: Uint8Array;
-    /** GS scale in u8[3] × totalNodes. */
     scale: Uint8Array;
-    /** GS quaternion in u8[3] × totalNodes (octahedral encoding). */
     quat: Uint8Array;
-    /** Optional SH coefficients. */
     sh?: Uint8Array;
 }
 
 /**
- * Holds per-block decoded tree data and provides per-frame traversal.
- *
- * Each frame, for each active block, calls native.traverseBlock to get
- * the LOD-selected indices, which are merged into a global order array.
+ * Holds per-block decoded tree data and provides per-frame LOD traversal.
  */
 export class BlockTree {
-    /** Decoded tree data for each block. */
     blocks: DecodedBlock[] = [];
+    private treeDataCache: (TreeData | null)[] = [];
 
-    /** Register decoded block data. */
     addBlock(data: DecodedBlock): void {
         this.blocks.push(data);
+        // Pre-compute traverse data (f32 centers + feature sizes)
+        const totalNodes = data.totalNodes;
+        const centers = new Float32Array(totalNodes * 3);
+        for (let i = 0; i < totalNodes; i++) {
+            centers[i * 3] = f16ToF32(data.center[i * 3]);
+            centers[i * 3 + 1] = f16ToF32(data.center[i * 3 + 1]);
+            centers[i * 3 + 2] = f16ToF32(data.center[i * 3 + 2]);
+        }
+        const featureSizes = computeFeatureSizes(data.scale, totalNodes);
+        this.treeDataCache.push({
+            totalNodes,
+            childStart: data.childStart,
+            childCount: data.childCount,
+            centers,
+            featureSizes,
+        });
     }
 
-    /** Clear all block data. */
     clear(): void {
         this.blocks.length = 0;
+        this.treeDataCache.length = 0;
     }
 
     /**
      * Traverse active blocks and produce a merged ordering array.
-     *
-     * @param activeBlockIds  Block IDs to traverse (from BlockManager).
-     * @param cameraPos       Camera position [x, y, z].
-     * @param lodScale        LOD scale factor.
-     * @param pixelScaleLimit Pixel scale threshold.
-     * @param maxSplats       Max GS output per block.
-     * @param traverseFn      Native traverseBlock function reference.
-     * @returns Merged Uint32Array of paged_indices for all traversed blocks.
      */
     traverse(
         activeBlockIds: number[],
-        cameraPos: Float32Array,
+        cameraPos: [number, number, number],
         lodScale: number,
         pixelScaleLimit: number,
         maxSplats: number,
-        traverseFn: (
-            childStart: Uint32Array,
-            childCount: Uint16Array,
-            center: Uint16Array,
-            size: Uint16Array,
-            cameraPos: Float32Array,
-            maxSplats: number,
-            lodScale: number,
-            pixelScaleLimit: number,
-        ) => { indices: Uint32Array; numSplats: number },
     ): { order: Uint32Array; totalSplats: number } {
         const allIndices: Uint32Array[] = [];
         let total = 0;
 
         for (const blockId of activeBlockIds) {
-            const block = this.blocks[blockId];
-            if (!block) continue;
+            const td = this.treeDataCache[blockId];
+            if (!td) continue;
 
-            const result = traverseFn(
-                block.childStart,
-                block.childCount,
-                block.center,
-                new Uint16Array(block.totalNodes), // size f16 placeholder
-                cameraPos,
-                maxSplats,
-                lodScale,
-                pixelScaleLimit,
-            );
-
-            if (result.numSplats > 0) {
-                allIndices.push(result.indices.subarray(0, result.numSplats));
-                total += result.numSplats;
+            const result = traverseBlock(td, cameraPos, [0, 0, 0], lodScale, pixelScaleLimit, maxSplats);
+            if (result.count > 0) {
+                allIndices.push(result.indices.subarray(0, result.count));
+                total += result.count;
             }
         }
 
-        // Merge into single order array
         const order = new Uint32Array(total);
         let offset = 0;
         for (const indices of allIndices) {

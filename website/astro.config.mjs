@@ -75,7 +75,7 @@ export default defineConfig({
             },
         },
         optimizeDeps: {
-            exclude: ['monaco-editor', '@manycore/aholo-viewer'],
+            exclude: ['monaco-editor', '@manycore/aholo-viewer', '@qunhe/egs', '@qunhe/egs-lib', '@qunhe/egs-splat-loader', '@qunhe/egs-splat-utils'],
         },
         environments: {
             client: {

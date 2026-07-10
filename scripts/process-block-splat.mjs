@@ -152,9 +152,14 @@ for (let bi = 0; bi < blockRanges.length; bi++) {
         }
     }
 
-    // Write .splat file from the original GS data (before tree construction)
-    console.time(`  writeSplat ${bi}`);
+    // Build LOD tree
+    console.time(`  buildTree ${bi}`);
+    const tree = native.buildLodTree(bc, bs, bq, br, null, count, 0, multipliers);
+    console.timeEnd(`  buildTree ${bi}`);
+
+    // Write .splat from original GS data (spatially local, best visual quality)
     const ITEM = 32;
+    console.time(`  writeSplat ${bi}`);
     const splatBuf = Buffer.alloc(count * ITEM);
     for (let j = 0; j < count; j++) {
         const o = j * ITEM;
@@ -168,19 +173,14 @@ for (let bi = 0; bi < blockRanges.length; bi++) {
         splatBuf[o + 25] = Math.round(br[j * 4 + 1] * 255);
         splatBuf[o + 26] = Math.round(br[j * 4 + 2] * 255);
         splatBuf[o + 27] = Math.round(br[j * 4 + 3] * 255);
-        splatBuf[o + 28] = Math.min(255, Math.max(0, Math.round(bq[j * 4 + 3] * 128 + 128))); // qw
-        splatBuf[o + 29] = Math.min(255, Math.max(0, Math.round(bq[j * 4] * 128 + 128)));     // qx
-        splatBuf[o + 30] = Math.min(255, Math.max(0, Math.round(bq[j * 4 + 1] * 128 + 128))); // qy
-        splatBuf[o + 31] = Math.min(255, Math.max(0, Math.round(bq[j * 4 + 2] * 128 + 128))); // qz
+        splatBuf[o + 28] = Math.min(255, Math.max(0, Math.round(bq[j * 4 + 3] * 128 + 128)));
+        splatBuf[o + 29] = Math.min(255, Math.max(0, Math.round(bq[j * 4] * 128 + 128)));
+        splatBuf[o + 30] = Math.min(255, Math.max(0, Math.round(bq[j * 4 + 1] * 128 + 128)));
+        splatBuf[o + 31] = Math.min(255, Math.max(0, Math.round(bq[j * 4 + 2] * 128 + 128)));
     }
     const splatName = `block_${bi}.splat`;
     writeFileSync(join(outDir, splatName), splatBuf);
     console.timeEnd(`  writeSplat ${bi}`);
-
-    // Build LOD tree
-    console.time(`  buildTree ${bi}`);
-    const tree = native.buildLodTree(bc, bs, bq, br, null, count, 0, multipliers);
-    console.timeEnd(`  buildTree ${bi}`);
 
     // Encode RAD
     console.time(`  encodeRad ${bi}`);
@@ -194,20 +194,24 @@ for (let bi = 0; bi < blockRanges.length; bi++) {
     // Write .rad file
     const fileName = `block_${bi}.rad`;
     writeFileSync(join(outDir, fileName), Buffer.from(rad));
+    const nodeCount = tree.treeNodeCount;
 
     outputBlocks.push({
         bound: { min: range.min, max: range.max },
         file: bi,
         count: tree.gsCount,
+        treeNodeCount: nodeCount,
     });
 }
 
 // Write lod-meta.json
+const totalTreeNodes = outputBlocks.reduce((s, b) => s + b.treeNodeCount, 0);
 const lodMeta = {
     magicCode: 0x262834,
     type: 'lod-splat',
     version: '1.0',
     counts: numGs,
+    totalTreeNodes,
     shDegree: 0,
     levels: 5,
     files: outputBlocks.map(b => `block_${b.file}.splat`),
@@ -215,6 +219,7 @@ const lodMeta = {
         bound: b.bound,
         file: b.file,
         count: b.count,
+        treeNodeCount: b.treeNodeCount,
     })),
 };
 

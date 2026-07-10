@@ -25,7 +25,7 @@ function readU64LE(data: Uint8Array, off: number): number {
     return lo + hi * 0x100000000;
 }
 
-function f16ToF32(h: number): number {
+export function f16ToF32(h: number): number {
     const sign = (h & 0x8000) << 16;
     let exp = (h >> 10) & 0x1f;
     let mant = h & 0x3ff;
@@ -43,9 +43,9 @@ function f16ToF32(h: number): number {
         exp += 112;
     }
     const bits = sign | (exp << 23) | (mant << 13);
-    const arr = new Float32Array(1);
-    arr[0] = bits;
-    return arr[0];
+    const u32 = new Uint32Array(1);
+    u32[0] = bits;
+    return new Float32Array(u32.buffer)[0];
 }
 
 /** Decode Ln0R8 scale value to float */

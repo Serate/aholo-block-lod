@@ -88,7 +88,8 @@ import { SharedTexturePool } from './shared-texture-pool.js';
 import { BlockManager, BlockState, type BlockMeta, type BlockHandle } from './block-manager.js';
 import { BlockTree, type DecodedBlock } from './block-tree.js';
 import { BlockLodRenderer } from './block-renderer.js';
-import { decodeRad, decodedBlockToSplatData } from './rad-decoder-browser.js';
+import { decodeRad, decodedBlockToSplatData, f16ToF32 } from './rad-decoder-browser.js';
+import { traverseBlock, computeFeatureSizes } from './traverse-block.js';
 
 import {
     Application,
@@ -385,6 +386,10 @@ export {
     BlockLodRenderer,
     decodeRad,
     decodedBlockToSplatData,
+    f16ToF32,
+    traverseBlock,
+    computeFeatureSizes,
 };
 
 export type { BlockMeta, BlockHandle, DecodedBlock };
+export type { TreeData, TraverseResult } from './traverse-block.js';

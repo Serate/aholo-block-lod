@@ -20,18 +20,6 @@ export class BlockLodRenderer {
     readonly blockTree = new BlockTree();
     readonly texturePool: SharedTexturePool;
 
-    /** Native traverseBlock function (set after native module loads). */
-    traverseFn?: (
-        childStart: Uint32Array,
-        childCount: Uint16Array,
-        center: Uint16Array,
-        size: Uint16Array,
-        cameraPos: Float32Array,
-        maxSplats: number,
-        lodScale: number,
-        pixelScaleLimit: number,
-    ) => { indices: Uint32Array; numSplats: number };
-
     constructor(config?: BlockManagerConfig & { maxPoolPages?: number }) {
         this.blockManager = new BlockManager(config);
         this.texturePool = new SharedTexturePool(config?.maxPoolPages ?? 64);
@@ -53,8 +41,6 @@ export class BlockLodRenderer {
         pixelScaleLimit = 0.001,
         maxSplatsPerBlock = 500000,
     ): void {
-        if (!this.traverseFn) return;
-
         const plugin = splattingPlugin ?? __INTERNAL__.getSplattingPlugin();
         if (!plugin) return;
 
@@ -67,14 +53,13 @@ export class BlockLodRenderer {
             return;
         }
 
-        const camPosArray = new Float32Array([cameraPos.x, cameraPos.y, cameraPos.z]);
+        const camPos: [number, number, number] = [cameraPos.x, cameraPos.y, cameraPos.z];
         const { order, totalSplats } = this.blockTree.traverse(
             activeBlockIds,
-            camPosArray,
+            camPos,
             lodScale,
             pixelScaleLimit,
             maxSplatsPerBlock,
-            this.traverseFn,
         );
 
         plugin.setExternalOrder(order, totalSplats);

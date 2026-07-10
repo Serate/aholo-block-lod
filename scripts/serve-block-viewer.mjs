@@ -93,20 +93,23 @@ body{background:#111;color:#eee;font-family:system-ui,sans-serif;overflow:hidden
 #loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#888;font-size:18px;z-index:5}
 .loading-bar{width:200px;height:3px;background:#333;border-radius:2px;margin:12px auto 0;overflow:hidden}
 .loading-bar-inner{height:100%;width:0%;background:#8cf;transition:width .3s}
+#error{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#f66;font-size:14px;z-index:10;max-width:80%;background:rgba(0,0,0,.8);padding:20px;border-radius:8px;white-space:pre-wrap;text-align:center}
 </style>
 </head>
 <body>
 <div id="info">
-  <h2>🔲 Block LOD Viewer</h2>
+  <h2>Block LOD Viewer</h2>
   <div class="stat">Blocks: <span id="statBlocks">-</span></div>
   <div class="stat">Total GS: <span id="statGs">-</span></div>
-  <div class="stat">Rendered: <span id="statRendered">-</span></div>
+  <div class="stat">Points loaded: <span id="statLoaded">0</span></div>
+  <div class="stat">Time: <span id="statTime">-</span></div>
 </div>
 <div id="controls">
-  <button id="btnPoints" class="active">Points</button>
-  <button id="BtnResetView">Reset View</button>
+  <button id="btnPoints" class="active">Show Points</button>
+  <button id="btnFit">Fit View</button>
 </div>
 <div id="loading">Loading blocks...<div class="loading-bar"><div class="loading-bar-inner" id="loadBar"></div></div></div>
+<div id="error"></div>
 <canvas id="canvas"></canvas>
 
 <script type="importmap">
@@ -120,92 +123,106 @@ body{background:#111;color:#eee;font-family:system-ui,sans-serif;overflow:hidden
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
-// ── RAD decoder (browser-compatible) ──
+// ── RAD decoder ──
 
-function readU32LE(d, o) { return d[o]|(d[o+1]<<8)|(d[o+2]<<16)|(d[o+3]<<24); }
-function readU64LE(d, o) { return readU32LE(d,o)+readU32LE(d,o+4)*0x100000000; }
+function readU32(d, o) { return d[o]|(d[o+1]<<8)|(d[o+2]<<16)|(d[o+3]<<24); }
+function readU64(d, o) { return readU32(d,o)+readU32(d,o+4)*0x100000000; }
 
 async function decompressRawDeflate(data) {
   const cs = new DecompressionStream('deflate-raw');
   const w = cs.writable.getWriter();
   w.write(data); w.close();
   const r = cs.readable.getReader();
-  const chunks = [];
-  while (true) { const {done,value}=await r.read(); if(done)break; chunks.push(value); }
-  const total = chunks.reduce((s,c)=>s+c.length,0);
-  const result = new Uint8Array(total);
-  let off=0; for(const c of chunks){result.set(c,off);off+=c.length;}
-  return result;
+  const ch = [];
+  for(;;){const{done,value}=await r.read();if(done)break;ch.push(value)}
+  const t = ch.reduce((s,c)=>s+c.length,0);
+  const o = new Uint8Array(t); let p=0; for(const c of ch){o.set(c,p);p+=c.length}
+  return o;
 }
 
 async function decodeProperty(data) {
   if(data.length<1) return new Uint8Array(0);
-  const tag=data[0];
-  if(tag===0) return data.slice(1);
-  if(tag===1) return decompressRawDeflate(data.slice(1));
+  if(data[0]===0) return data.slice(1);
+  if(data[0]===1) return decompressRawDeflate(data.slice(1));
   return data;
 }
 
-async function decodeRad(data) {
-  if(data.length<8||readU32LE(data,0)!==0x30444152) return null;
-  const metaLen=readU32LE(data,4);
-  const metaEnd=8+((metaLen+7)&~7);
-  if(data.length<metaEnd) return null;
-  const meta=JSON.parse(new TextDecoder().decode(data.slice(8,8+metaLen)));
-  const total=meta.count, chunkSize=meta.chunkSize||16384, chunks=meta.chunks;
-  const result={center:[],rgba:[],scale:[]};
-  const chunksStart=metaEnd;
-  let base=0;
-  for(const cr of chunks){
-    if(base>=total) break;
-    const chunkOff=chunksStart+cr.offset;
-    const chunkData=data.slice(chunkOff,chunkOff+Math.min(cr.bytes,data.length-chunkOff));
-    if(chunkData.length<8) break;
-    const cm=readU32LE(chunkData,0);
-    if(cm!==0x43444152) break;
-    const cmLen=readU32LE(chunkData,4);
-    const cmEnd=8+((cmLen+7)&~7);
-    const payloadBytes=readU64LE(chunkData,cmEnd);
-    const payloadStart=cmEnd+8;
-    const cmJson=JSON.parse(new TextDecoder().decode(chunkData.slice(8,8+cmLen)));
-    for(const prop of cmJson.properties){
-      if(prop.offset+prop.bytes>payloadBytes) continue;
-      const pd=chunkData.slice(payloadStart+prop.offset,payloadStart+prop.offset+prop.bytes);
-      const decomp=await decodeProperty(pd);
-      const nItems=Math.min(decomp.length/4,total-base);
-      if(prop.property==='center'&&decomp.length>=12){
-        const f32=new Float32Array(decomp.buffer,decomp.byteOffset,decomp.length/4);
-        const pdim=Math.min(decomp.length/12,total-base);
-        for(let i=0;i<pdim;i++){
-          result.center[base+i*3]=f32[i];   // x
-          result.center[base+i*3+1]=f32[pdim+i]; // y
-          result.center[base+i*3+2]=f32[pdim*2+i]; // z
-        }
-      }else if(prop.property==='rgb'&&decomp.length>=3){
-        const n=Math.min(Math.floor(decomp.length/3),total-base);
-        for(let i=0;i<n;i++){
-          result.rgba[base+i*4]=decomp[i*3];
-          result.rgba[base+i*4+1]=decomp[i*3+1];
-          result.rgba[base+i*4+2]=decomp[i*3+2];
-        }
-      }else if(prop.property==='alpha'){
-        const n=Math.min(decomp.length,total-base);
-        for(let i=0;i<n;i++) result.rgba[base+i*4+3]=decomp[i];
-      }else if(prop.property==='scale'&&decomp.length>=3){
-        const n=Math.min(Math.floor(decomp.length/3),total-base);
-        for(let i=0;i<n;i++){
-          result.scale[base+i*3]=decomp[i*3];
-          result.scale[base+i*3+1]=decomp[i*3+1];
-          result.scale[base+i*3+2]=decomp[i*3+2];
+function f16(h) {
+  const s=(h&0x8000)<<16; let e=(h>>10)&0x1f,m=h&0x3ff;
+  if(e===0){e=1;while(!(m&0x400)&&m){m<<=1;e--}m&=0x3ff;e+=112}
+  else if(e===31)e=255;else e+=112;
+  const b=s|(e<<23)|(m<<13);const a=new Float32Array(1);a[0]=b;return a[0];
+}
+
+/**
+ * Decode .rad file → positions Float32Array + colors Float32Array.
+ * Returns { positions, colors, count } or null on error.
+ */
+async function decodeRadToArrays(data) {
+  try {
+    if(data.length<8||readU32(data,0)!==0x30444152) throw new Error('Bad magic');
+    const ml=readU32(data,4), me=8+((ml+7)&~7);
+    if(data.length<me) throw new Error('Truncated header');
+    const meta=JSON.parse(new TextDecoder().decode(data.slice(8,8+ml)));
+    const total=meta.count, chunkSize=meta.chunkSize||16384, chunks=meta.chunks;
+
+    // Pre-allocate
+    const pos = new Float32Array(total * 3);
+    const col = new Float32Array(total * 3);
+    let gsCount = 0;
+    const chunksStart = me;
+
+    for(const cr of chunks){
+      if(gsCount>=total) break;
+      const co=chunksStart+cr.offset;
+      let cd=data.slice(co,co+Math.min(cr.bytes,data.length-co));
+      if(cd.length<8||readU32(cd,0)!==0x43444152) break;
+      const cml=readU32(cd,4), cme=8+((cml+7)&~7);
+      const pb=readU64(cd,cme), ps=cme+8;
+      const cj=JSON.parse(new TextDecoder().decode(cd.slice(8,8+cml)));
+      let centerF32=null, alphaU8=null, rgbU8=null;
+
+      for(const prop of cj.properties){
+        if(prop.offset+prop.bytes>pb) continue;
+        const pd=cd.slice(ps+prop.offset,ps+prop.offset+prop.bytes);
+        const dc=await decodeProperty(pd);
+
+        if(prop.property==='center'&&dc.length>=12){
+          const f32=new Float32Array(dc.buffer,dc.byteOffset,dc.length/4);
+          const cnt=Math.min(Math.floor(dc.length/12),total-gsCount);
+          centerF32={data:f32,count:cnt};
+        }else if(prop.property==='alpha'&&dc.length>0){
+          alphaU8=dc;
+        }else if(prop.property==='rgb'&&dc.length>=3){
+          rgbU8=dc;
         }
       }
+
+      if(!centerF32) break;
+      const n=centerF32.count;
+      const d=centerF32.data;
+      for(let i=0;i<n&&gsCount+i<total;i++){
+        pos[(gsCount+i)*3]=d[i];
+        pos[(gsCount+i)*3+1]=d[n+i];
+        pos[(gsCount+i)*3+2]=d[n*2+i];
+        if(rgbU8){
+          col[(gsCount+i)*3]=rgbU8[i*3]/255;
+          col[(gsCount+i)*3+1]=rgbU8[i*3+1]/255;
+          col[(gsCount+i)*3+2]=rgbU8[i*3+2]/255;
+        }else{
+          col[(gsCount+i)*3]=0.7;col[(gsCount+i)*3+1]=0.7;col[(gsCount+i)*3+2]=0.7;
+        }
+        // Apply alpha
+        if(alphaU8&&alphaU8[i]>0){
+          const a=alphaU8[i]/255;
+          for(let c=0;c<3;c++)col[(gsCount+i)*3+c]*=a;
+        }
+      }
+      gsCount+=n;
     }
-    base+=chunkSize;
-    if(base>total) base=total;
-  }
-  return result;
+    return {positions:pos.slice(0,gsCount*3),colors:col.slice(0,gsCount*3),count:gsCount};
+  } catch(e) { console.error('decodeRad error:', e); throw e; }
 }
 
 // ── Viewer ──
@@ -214,152 +231,137 @@ const canvas = document.getElementById('canvas');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x111111);
+renderer.setClearColor(0x1a1a2e);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
-
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
-camera.position.set(10, 10, 15);
-
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.01, 100000);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.1;
-controls.target.set(0, 0, 0);
+controls.target.set(0,0,0);
 
-const ambientLight = new THREE.AmbientLight(0x404040);
-scene.add(ambientLight);
-const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-dirLight.position.set(1, 2, 1);
-scene.add(dirLight);
-
-// Grid helper
-scene.add(new THREE.GridHelper(20, 20, 0x444444, 0x222222));
-
-let allBlocks = [];
-let showPoints = true;
 let pointsMesh = null;
-let blockMeshes = [];
 
-const loadingEl = document.getElementById('loading');
-const loadBar = document.getElementById('loadBar');
-
-function f16toF32(h) {
-  const s=(h&0x8000)<<16;
-  let e=(h>>10)&0x1f,m=h&0x3ff;
-  if(e===0){e=1;while(!(m&0x400)&&m){m<<=1;e--;}m&=0x3ff;e+=112;}
-  else if(e===31)e=255;else e+=112;
-  const bits=s|(e<<23)|(m<<13);
-  const arr=new Float32Array(1);arr[0]=bits;return arr[0];
+function showError(msg) {
+  const el = document.getElementById('error');
+  el.textContent = msg; el.style.display = 'block';
 }
-
-function ln0r8ToF32(u){return Math.exp((u/255)*21-12);}
 
 async function loadBlocks() {
   try {
+    const t0 = performance.now();
     const metaResp = await fetch('lod-meta.json');
+    if(!metaResp.ok) throw new Error('lod-meta.json not found');
     const meta = await metaResp.json();
     document.getElementById('statBlocks').textContent = meta.tree.length;
     document.getElementById('statGs').textContent = meta.counts.toLocaleString();
-    loadingEl.style.display = 'block';
 
-    const allPos = [];
-    const allColors = [];
-    let totalLoaded = 0;
+    // Accumulate all positions & colors
+    let allPos = null, allCol = null, totalPts = 0;
 
-    for (let bi = 0; bi < meta.tree.length; bi++) {
-      const fileName = meta.files[bi];
-      const resp = await fetch(fileName);
+    for(let bi=0;bi<meta.tree.length;bi++){
+      const fn = meta.files[bi];
+      const resp = await fetch(fn);
+      if(!resp.ok) throw new Error('Failed to fetch '+fn);
       const buf = await resp.arrayBuffer();
-      const decoded = await decodeRad(new Uint8Array(buf));
-
-      // Extract positions and colors
-      const centerF32 = new Float32Array(decoded.center.length);
-      for (let i = 0; i < decoded.center.length / 3; i++) {
-        centerF32[i*3]   = f16toF32(decoded.center[i*3]);
-        centerF32[i*3+1] = f16toF32(decoded.center[i*3+1]);
-        centerF32[i*3+2] = f16toF32(decoded.center[i*3+2]);
+      const result = await decodeRadToArrays(new Uint8Array(buf));
+      if(!result||result.count===0){
+        console.warn('Block '+bi+': empty');
+        continue;
       }
-      for (let i = 0; i < decoded.center.length / 3; i++) {
-        allPos.push(centerF32[i*3], centerF32[i*3+1], centerF32[i*3+2]);
-        allColors.push(
-          (decoded.rgba?.[i*4]??128) / 255,
-          (decoded.rgba?.[i*4+1]??128) / 255,
-          (decoded.rgba?.[i*4+2]??128) / 255,
-        );
+      // Merge
+      if(allPos===null){
+        allPos = result.positions;
+        allCol = result.colors;
+      } else {
+        const np = new Float32Array(allPos.length + result.positions.length);
+        np.set(allPos); np.set(result.positions, allPos.length);
+        allPos = np;
+        const nc = new Float32Array(allCol.length + result.colors.length);
+        nc.set(allCol); nc.set(result.colors, allCol.length);
+        allCol = nc;
       }
-
-      totalLoaded += decoded.center.length / 3;
-      loadBar.style.width = Math.min(100, ((bi + 1) / meta.tree.length) * 100) + '%';
-      document.getElementById('statRendered').textContent = totalLoaded.toLocaleString();
+      totalPts += result.count;
+      document.getElementById('statLoaded').textContent = totalPts.toLocaleString();
+      document.getElementById('loadBar').style.width = ((bi+1)/meta.tree.length*100)+'%';
     }
+
+    document.getElementById('loading').style.display = 'none';
+
+    if(!allPos||totalPts===0){
+      showError('No points loaded');
+      return;
+    }
+
+    console.log('Total points:', totalPts);
+    console.log('First 5 positions:', allPos[0], allPos[1], allPos[2], allPos[3], allPos[4], allPos[5], allPos[6], allPos[7], allPos[8], allPos[9], allPos[10], allPos[11], allPos[12], allPos[13], allPos[14]);
+    console.log('First 5 colors:', allCol[0], allCol[1], allCol[2], allCol[3], allCol[4], allCol[5], allCol[6], allCol[7], allCol[8], allCol[9], allCol[10], allCol[11], allCol[12], allCol[13], allCol[14]);
+    document.getElementById('statLoaded').textContent = totalPts.toLocaleString();
+    document.getElementById('statTime').textContent = ((performance.now()-t0)/1000).toFixed(1)+'s';
 
     // Create point cloud
     const geom = new THREE.BufferGeometry();
     geom.setAttribute('position', new THREE.Float32BufferAttribute(allPos, 3));
-    geom.setAttribute('color', new THREE.Float32BufferAttribute(allColors, 3));
+    geom.setAttribute('color', new THREE.Float32BufferAttribute(allCol, 3));
 
-    const mat = new THREE.PointsMaterial({
-      size: 0.05,
-      vertexColors: true,
-      sizeAttenuation: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      transparent: true,
-      opacity: 0.9,
-    });
-    pointsMesh = new THREE.Points(geom, mat);
-    scene.add(pointsMesh);
-    allBlocks.push(pointsMesh);
-
-    // Compute scene center
-    const box = new THREE.Box3().setFromObject(pointsMesh);
+    // Compute bounds for camera
+    const box = new THREE.Box3().setFromArray(allPos);
     const center = new THREE.Vector3();
     box.getCenter(center);
-    controls.target.copy(center);
-
-    // Auto-fit camera
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
-    const dist = maxDim * 1.5;
-    camera.position.set(dist * 0.6, dist * 0.4, dist * 0.8);
-    camera.lookAt(center);
-    controls.update();
+    console.log('Scene size:', size.x.toFixed(1), size.y.toFixed(1), size.z.toFixed(1));
 
-    loadingEl.style.display = 'none';
+    const mat = new THREE.PointsMaterial({
+      size: maxDim * 0.002, // adaptive point size
+      vertexColors: true,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.95,
+    });
+
+    pointsMesh = new THREE.Points(geom, mat);
+    scene.add(pointsMesh);
+
+    // Fit camera
+    const dist = maxDim * 1.8;
+    camera.position.set(dist*0.6, dist*0.4, dist*0.8);
+    controls.target.copy(center);
+    controls.update();
+    console.log('Camera pos:', camera.position);
+
   } catch(e) {
-    loadingEl.textContent = 'Error: ' + e.message;
-    console.error(e);
+    console.error('loadBlocks error:', e);
+    showError('Error: '+e.message);
+    document.getElementById('loading').style.display = 'none';
   }
 }
 
 // Controls
 document.getElementById('btnPoints').addEventListener('click', () => {
-  showPoints = !showPoints;
-  if (pointsMesh) pointsMesh.visible = showPoints;
-  document.getElementById('btnPoints').classList.toggle('active', showPoints);
+  if(!pointsMesh) return;
+  pointsMesh.visible = !pointsMesh.visible;
+  document.getElementById('btnPoints').classList.toggle('active', pointsMesh.visible);
 });
 
-document.getElementById('BtnResetView').addEventListener('click', () => {
-  if (allBlocks.length > 0) {
-    const box = new THREE.Box3().setFromObject(allBlocks[0]);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    controls.target.copy(center);
-    const size = box.getSize(new THREE.Vector3());
-    const dist = Math.max(size.x, size.y, size.z) * 1.5;
-    camera.position.set(dist * 0.6, dist * 0.4, dist * 0.8);
-    controls.update();
-  }
+document.getElementById('btnFit').addEventListener('click', () => {
+  if(!pointsMesh) return;
+  const box = new THREE.Box3().setFromObject(pointsMesh);
+  const c = new THREE.Vector3(); box.getCenter(c);
+  const s = new THREE.Vector3(); box.getSize(s);
+  const d = Math.max(s.x,s.y,s.z)*1.8;
+  controls.target.copy(c);
+  camera.position.set(d*0.6,d*0.4,d*0.8);
+  controls.update();
 });
 
-// Resize
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Render loop
 function animate() {
   controls.update();
   renderer.render(scene, camera);
