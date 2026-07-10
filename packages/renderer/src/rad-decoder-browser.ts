@@ -85,7 +85,7 @@ function oct88r8ToF32(u: number, v: number, a: number): [number, number, number,
 async function decompressRawDeflate(data: Uint8Array): Promise<Uint8Array> {
     const cs = new DecompressionStream('deflate-raw');
     const writer = cs.writable.getWriter();
-    writer.write(data);
+    writer.write(data as BufferSource);
     writer.close();
     const reader = cs.readable.getReader();
     const chunks: Uint8Array[] = [];
@@ -191,13 +191,6 @@ export async function decodeRad(data: Uint8Array): Promise<RadDecodeResult | nul
             if (prop.offset + prop.bytes > payloadBytes) continue;
             const propData = chunkData.slice(payloadStart + prop.offset, payloadStart + prop.offset + prop.bytes);
             const decomp = await decodeProperty(propData);
-            const n =
-                prop.property === 'child_start'
-                    ? decomp.length / 4
-                    : prop.property === 'child_count'
-                      ? decomp.length / 2
-                      : decomp.length; // fallback
-
             switch (prop.property) {
                 case 'center': {
                     // F32LeBytes: per-dimension plane layout

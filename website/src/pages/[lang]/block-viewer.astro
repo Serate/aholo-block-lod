@@ -21,10 +21,10 @@ const { lang } = Astro.props;
       const viewer = createViewer('block-viewer', root, { rendering: { backend: 'webgl2' } });
       const scene = new Scene3D(); viewer.setScene(scene);
       const camera = new PerspectiveCamera(60, root.clientWidth / root.clientHeight, 0.1, 10000);
-      scene.add(camera); viewer.setActiveCamera(camera);
-
-      const meta = await (await fetch('/block-data/lod-meta.json')).json();
+      camera.position.set(15, 10, 20);
+      viewer.setCamera(camera);
       const status = document.getElementById('sStatus');
+      const meta = await (await fetch('/block-data/lod-meta.json')).json();
       status.textContent = `Loading ${meta.tree.length} blocks (${meta.counts} GS)...`;
 
       for (let bi = 0; bi < meta.tree.length; bi++) {
