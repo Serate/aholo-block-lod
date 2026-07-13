@@ -9,7 +9,8 @@ const { lang } = Astro.props;
 <BaseLayout lang={lang} title="Block Viewer" pageClass="workspace-page viewer-page" workspaceFullscreen>
 <main style="width:100%;height:100vh;background:#000"><div id="vp" style="width:100%;height:100%"></div>
 <div style="position:absolute;top:12px;left:12px;color:#fff;font:13px/1.6 system-ui;pointer-events:none;z-index:10" id="st">Loading...</div>
-<output style="position:absolute;bottom:12px;right:12px;color:#0f0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="fps">0</output></main>
+<output style="position:absolute;bottom:12px;right:12px;color:#0f0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="fps">0</output>
+<output style="position:absolute;bottom:32px;right:12px;color:#0f0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="gscount">0 GS</output></main>
 <script type="module">
 import { createViewer, Scene3D, PerspectiveCamera, SplatUtils, setViewerConfig, BackgroundMode, Color, Vector3 } from '@manycore/aholo-viewer';
 import { SplatLoader } from '@manycore/aholo-viewer';
@@ -67,6 +68,9 @@ function updateFps() {
   }
 }
 
+// GS count display
+const gsEl = document.getElementById('gscount');
+
 // Render loop — render every rAF tick
 let rafId;
 let lastTime = 0;
@@ -81,6 +85,7 @@ function frame(time) {
   }
   v.render(time, cam);
   updateFps();
+  gsEl.textContent = sc.splatManager.totalCount.toLocaleString() + ' GS';
 }
 rafId = requestAnimationFrame(frame);
 

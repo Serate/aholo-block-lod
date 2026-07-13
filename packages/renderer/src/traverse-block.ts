@@ -96,7 +96,6 @@ export interface TraverseResult {
 
 // Reusable temp arrays to avoid per-frame allocation in hot loop
 const heap = new MaxHeap();
-const pos: [number, number, number] = [0, 0, 0];
 
 /**
  * Compute pixel_scale for a node.
