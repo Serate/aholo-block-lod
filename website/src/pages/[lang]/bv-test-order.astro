@@ -1,0 +1,182 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { locales } from '../../i18n/locales.js';
+export function getStaticPaths() {
+  return locales.map(l => ({ params: { lang: l.code }, props: { lang: l.code } }));
+}
+const { lang } = Astro.props;
+---
+<BaseLayout lang={lang} title="BV setExternalOrder Test" pageClass="workspace-page viewer-page" workspaceFullscreen>
+<main style="width:100%;height:100vh;background:#000"><div id="vp" style="width:100%;height:100%"></div>
+<div style="position:absolute;top:12px;left:12px;color:#fff;font:13px/1.6 system-ui;pointer-events:none;z-index:10" id="st">Loading...</div>
+<output style="position:absolute;bottom:12px;right:12px;color:#0f0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="fps">0</output>
+<output style="position:absolute;bottom:32px;right:12px;color:#0f0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="gscount">0 GS</output>
+<output style="position:absolute;bottom:52px;right:12px;color:#ff0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="dbg">-</output></main>
+<script type="module">
+import { createViewer, Scene3D, PerspectiveCamera, SplatUtils, setViewerConfig, BackgroundMode, Color, Vector3, __INTERNAL__ } from '@manycore/aholo-viewer';
+import { SplatLoader } from '@manycore/aholo-viewer';
+import { decodeRad, decodedBlockToSplatData } from '@manycore/aholo-viewer';
+import { CameraControl } from '../../client/camera-control.js';
+import { syncCameraAspect } from '../../client/rendering.js';
+const { SuperCompressedSplatData } = SplatLoader;
+const { createSplat } = SplatUtils;
+
+const surface = document.getElementById('vp');
+const v = createViewer('bv', surface, { antialiasing: false });
+const sc = new Scene3D(); v.setScene(sc);
+const cam = new PerspectiveCamera(60, 1, 0.1, 2000);
+cam.up.set(0, -1, 0);
+cam.position.set(0, -1.2, 3);
+cam.lookAt(new Vector3(0, 0, 0));
+cam.far = 2000;
+cam.updateProjectionMatrix();
+v.setCamera(cam);
+const control = new CameraControl(cam, surface, { enabled: true, orbitCenter: { x: 0, y: 0, z: 0 } });
+
+setViewerConfig(v, {
+  pixelRatio: 1 / window.devicePixelRatio,
+  pipeline: {
+    Background: {
+      background: { active: BackgroundMode.BasicBackground, basic: { color: new Color(0, 0, 0), alpha: 1 } },
+      ground: { enabled: false },
+    },
+    Splatting: {
+      enabled: true,
+      pack: { highPrecisionEnabled: false, precalculateEnabled: true, cameraRelativeEnabled: true, sortedLayoutEnabled: false },
+      raster: { normalizedFalloff: false, preBlurAmount: 0.3, blurAmount: 0, focalAdjustment: 2, detailCullingThreshold: 1, maxPixelRadius: 1024, maxStdDev: Math.sqrt(8) },
+      sort: { highPrecisionEnabled: false, minIntervalMs: 0, sortSplatDistance: 0.1, sortSplatCoorient: 0.99999, sortCameraDistance: 1, sortCameraCoorient: 0.99 },
+      composite: { enabled: false, highPrecisionEnabled: false },
+      toneMapping: { enabled: false, toneMapping: 'Linear', exposure: 1 },
+      highlightKernel: { enabled: false, size: 2, color: '#0000ff' },
+    },
+  },
+});
+
+const fpsEl = document.getElementById('fps');
+const FPS_DISPLAY_INTERVAL_MS = 250;
+const FPS_SMOOTHING_FACTOR = 0.08;
+let fpsLastFrame = 0, fpsLastDisplay = 0, fpsSmoothed = 0;
+function updateFps() {
+  const now = performance.now();
+  if (!fpsLastFrame) { fpsLastFrame = now; fpsLastDisplay = now; return; }
+  const fd = Math.max(1, now - fpsLastFrame);
+  const fps = 1000 / fd;
+  fpsLastFrame = now;
+  fpsSmoothed = fpsSmoothed === 0 ? fps : fpsSmoothed + (fps - fpsSmoothed) * FPS_SMOOTHING_FACTOR;
+  if (now - fpsLastDisplay >= FPS_DISPLAY_INTERVAL_MS) {
+    fpsEl.textContent = String(Math.round(fpsSmoothed));
+    fpsLastDisplay = now;
+  }
+}
+
+const gsEl = document.getElementById('gscount');
+const dbgEl = document.getElementById('dbg');
+const st = document.getElementById('st');
+
+// ============================================================
+// Load .rad leaf nodes ONLY (same as bv-radonly)
+// Then manually test setExternalOrder
+// ============================================================
+const meta = await (await fetch('/block-data/lod-meta.json')).json();
+const totalTreeNodes = meta.totalTreeNodes;
+const totalLeaves = meta.tree.reduce((s, t) => s + t.count, 0);
+st.textContent = `Loading rad...`;
+
+const radBuffers = await Promise.all(
+  meta.tree.map((_, i) => fetch(`/block-data/block_${i}.rad`).then(r => r.arrayBuffer()))
+);
+const decodedBlocks = await Promise.all(
+  radBuffers.map(buf => decodeRad(new Uint8Array(buf)))
+);
+
+// Build LEAF-ONLY SplatData
+st.textContent = `Building leaf-only (${totalLeaves})...`;
+const scd = new SuperCompressedSplatData();
+scd.init(totalLeaves, 0);
+
+// Fix empty SH samplers (shDegree=0) to avoid WebGL texSubImage2D error
+const scdAny = /** @type {any} */ (scd);
+if (scdAny.sh1Sampler && scdAny.sh1Sampler.source.length === 0) {
+  scdAny.sh1Sampler.width = 1;
+  scdAny.sh1Sampler.height = 1;
+  scdAny.sh1Sampler.source = new Uint8Array(16);
+}
+if (scdAny.sh2Sampler && scdAny.sh2Sampler.source.length === 0) {
+  scdAny.sh2Sampler.width = 1;
+  scdAny.sh2Sampler.height = 1;
+  scdAny.sh2Sampler.source = new Uint8Array(16);
+}
+
+// Count leaves per block for offset calculation
+const leafCounts = decodedBlocks.map(db => {
+  let cnt = 0;
+  for (let i = 0; i < db.totalNodes; i++) if (db.childCount[i] === 0) cnt++;
+  return cnt;
+});
+
+let gIdx = 0;
+for (let bi = 0; bi < decodedBlocks.length; bi++) {
+  const db = decodedBlocks[bi];
+  const { table } = decodedBlockToSplatData(db);
+  for (let i = 0; i < db.totalNodes; i++) {
+    if (db.childCount[i] !== 0) continue;
+    scd.setCenter(gIdx, table[0][i], table[1][i], table[2][i]);
+    scd.setScale(gIdx, table[3][i], table[4][i], table[5][i]);
+    scd.setQuat(gIdx, table[6][i], table[7][i], table[8][i], table[9][i]);
+    scd.setColor(gIdx, table[10][i], table[11][i], table[12][i]);
+    scd.setAlpha(gIdx, table[13][i] * 2);
+    gIdx++;
+  }
+}
+
+st.textContent = `createSplat...`;
+const splat = await createSplat(scd);
+sc.add(splat);
+console.log('leaf SplatData:', totalLeaves, 'GS, splat.counts:', splat.counts);
+
+sc.notifySceneChange();
+v.render(performance.now(), cam);
+st.textContent = `${totalLeaves} leaf GS, testing setExternalOrder...`;
+
+// ============================================================
+// Step 3c: Manual setExternalOrder test
+// After first render, get plugin and set a simple order
+// ============================================================
+const plugin = __INTERNAL__.getSplattingPlugin();
+if (!plugin) {
+  dbgEl.textContent = 'ERROR: plugin not found';
+  throw new Error('no plugin');
+}
+
+// ---- Render loop with per-frame setExternalOrder ----
+let rafId;
+let lastTime = 0;
+let frameCount = 0;
+
+// Test 1: first 1000 leaves — allocate extra for reorder texture (w*h ≥ count)
+const ORDER_ALLOC = 1024 * 1024; // 1M, enough for any reorder texture size
+const order1 = new Uint32Array(ORDER_ALLOC);
+for (let i = 0; i < 1000; i++) order1[i] = i;
+
+function frame(time) {
+  rafId = requestAnimationFrame(frame);
+  const delta = Math.min((time - lastTime) / 1000, 0.1);
+  lastTime = time;
+  const moved = control.update(delta);
+  if (moved) {
+    syncCameraAspect(cam, v);
+    sc.notifySceneChange();
+  }
+
+  // Call setExternalOrder every frame with known-good indices
+  plugin.setExternalOrder(order1, 1000);
+
+  v.render(time, cam);
+  updateFps();
+  if (frameCount++ % 30 === 0) {
+    const s = order1.subarray(0, 5);
+    dbgEl.textContent = `order[0..4]=${Array.from(s).join(',')} count=1000`;
+  }
+}
+rafId = requestAnimationFrame(frame);</script>
+</BaseLayout>

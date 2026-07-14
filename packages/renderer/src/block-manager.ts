@@ -1,4 +1,4 @@
-import { Vector3 } from '@qunhe/egs';
+import { Vector3, Frustum, Matrix4, PerspectiveCamera } from '@qunhe/egs';
 
 /**
  * Metadata for one block from lod-meta.json.
@@ -53,39 +53,14 @@ export interface BlockManagerConfig {
     fadeFrames?: number;
 }
 
-const DEFAULT_CONFIG: Required<BlockManagerConfig> = {
-    maxActiveBlocks: 4,
-    preloadDist: 2.0,
-    evictDist: 2.5,
-    fadeFrames: 8,
-};
-
 /**
- * Manages the lifecycle of LOD blocks using distance-based heuristics.
- *
- * State machine:
- *   Free → Loading → Active → Fading → Free
- *
- * Distance rule:
- *   dist ≤ preloadDist × diagonal  → load
- *   dist >  evictDist  × diagonal  → unload (fade then free)
- *
- * The caller is responsible for providing the camera position each frame.
- * Frustum culling is handled by the tree traversal at a per-node level.
+ * Manages LOD blocks with frustum-aware weighting (aholo-style).
  */
 export class BlockManager {
-    private config: Required<BlockManagerConfig>;
-
     /** All known blocks. Indexed by block file index. */
     readonly blocks: BlockHandle[] = [];
 
-    /** Callbacks for lifecycle events. */
-    onBlockLoad?: (blockId: number) => void;
-    onBlockFree?: (blockId: number) => void;
-
-    constructor(config?: BlockManagerConfig) {
-        this.config = { ...DEFAULT_CONFIG, ...config };
-    }
+    constructor(_config?: BlockManagerConfig) {}
 
     /** Initialize with block metadata from lod-meta.json. */
     init(metaBlocks: BlockMeta[]): void {
@@ -111,78 +86,46 @@ export class BlockManager {
     }
 
     /**
-     * Per-frame update. Returns block IDs that are Active this frame.
+     * Per-frame update with frustum-aware weighting (aholo-style).
+     * Returns all block IDs sorted by priority (weight descending).
      */
-    update(cameraPos: Vector3): number[] {
-        const { blocks, config } = this;
-        const { preloadDist, evictDist, maxActiveBlocks, fadeFrames } = config;
+    update(camera: PerspectiveCamera): { blockIds: number[]; weights: Float32Array } {
+        const { blocks } = this;
 
-        // Phase 1: evaluate all blocks
-        const active: { id: number; dist: number }[] = [];
-        let activeCount = 0;
+        const frustum = new Frustum().setFromMatrix(
+            new Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
+        );
+        const cameraPos = camera.position;
+        const forward = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        const temp = new Vector3();
+        const tempMin = new Vector3();
+        const tempMax = new Vector3();
+        const weighted: { id: number; weight: number }[] = [];
 
         for (let i = 0; i < blocks.length; i++) {
             const block = blocks[i];
-            const dist = cameraPos.distanceTo(block.center);
-            const threshold = block.diagonal;
+            tempMin.set(block.meta.bound.min[0], block.meta.bound.min[1], block.meta.bound.min[2]);
+            tempMax.set(block.meta.bound.max[0], block.meta.bound.max[1], block.meta.bound.max[2]);
+            const closest = temp.copy(cameraPos).clamp(tempMin, tempMax);
+            const insideBox =
+                cameraPos.x >= tempMin.x &&
+                cameraPos.x <= tempMax.x &&
+                cameraPos.y >= tempMin.y &&
+                cameraPos.y <= tempMax.y &&
+                cameraPos.z >= tempMin.z &&
+                cameraPos.z <= tempMax.z;
+            const dist = insideBox ? 0 : cameraPos.distanceTo(closest);
+            const isInside = frustum.intersectsBox({ min: tempMin, max: tempMax } as any);
+            const dirTo = temp.copy(closest).sub(cameraPos).normalize();
+            const isBehind = !insideBox && forward.dot(dirTo) < -0.2 && dist > 2;
 
-            switch (block.state) {
-                case BlockState.Free:
-                    if (dist <= preloadDist * threshold) {
-                        block.state = BlockState.Loading;
-                        this.onBlockLoad?.(i);
-                    }
-                    break;
-
-                case BlockState.Loading:
-                    // Await markLoaded() from caller
-                    break;
-
-                case BlockState.Active:
-                    activeCount++;
-                    if (dist > evictDist * threshold) {
-                        block.state = BlockState.Fading;
-                        block.fadeFrames = fadeFrames;
-                    } else {
-                        active.push({ id: i, dist });
-                    }
-                    break;
-
-                case BlockState.Fading:
-                    block.fadeFrames--;
-                    if (block.fadeFrames <= 0) {
-                        block.state = BlockState.Free;
-                        this.onBlockFree?.(i);
-                    } else if (dist <= preloadDist * threshold) {
-                        // Came back into range → reactivate
-                        block.state = BlockState.Active;
-                        active.push({ id: i, dist });
-                    }
-                    break;
-            }
+            const weight = (1 / (1 + 0.1 * dist * dist)) * (isInside ? 1 : 0.4) * (isBehind ? 0.1 : 1);
+            block.state = BlockState.Active;
+            weighted.push({ id: i, weight });
         }
 
-        // Phase 2: cap active count — evict farthest if over limit
-        if (activeCount > maxActiveBlocks) {
-            const sorted = blocks
-                .map((b, i) => ({ id: i, dist: cameraPos.distanceTo(b.center), state: b.state }))
-                .filter(b => b.state === BlockState.Active)
-                .sort((a, b) => b.dist - a.dist);
-
-            const toEvict = activeCount - maxActiveBlocks;
-            for (let i = 0; i < toEvict && i < sorted.length; i++) {
-                const block = blocks[sorted[i].id];
-                block.state = BlockState.Fading;
-                block.fadeFrames = fadeFrames;
-                // Remove from active list
-                const idx = active.findIndex(a => a.id === sorted[i].id);
-                if (idx >= 0) active.splice(idx, 1);
-            }
-        }
-
-        // Return active block IDs sorted near-first
-        active.sort((a, b) => a.dist - b.dist);
-        return active.map(a => a.id);
+        weighted.sort((a, b) => b.weight - a.weight);
+        return { blockIds: weighted.map(w => w.id), weights: new Float32Array(weighted.map(w => w.weight)) };
     }
 
     /** Mark a loading block as active (call after async decode). */
@@ -207,6 +150,5 @@ export class BlockManager {
         if (!block) return;
         block.state = BlockState.Free;
         block.fadeFrames = 0;
-        this.onBlockFree?.(blockId);
     }
 }

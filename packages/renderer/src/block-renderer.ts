@@ -33,6 +33,19 @@ export class BlockLodRenderer {
     /** Number of GS selected in the last update (for UI display). */
     lastSelectedCount = 0;
 
+    /** Cached last traverse result to avoid re-traversal when camera is still. */
+    private _lastOrder: Uint32Array | null = null;
+    private _lastCount = 0;
+    private _lastCamPos = new Vector3();
+    private _lastCamFwd = new Vector3();
+
+    /**
+     * Optional mapping from .rad global index → leaf-only global index.
+     * When set, traverse output indices are remapped before setExternalOrder.
+     * radToLeaf[radIndex] = leafIndex. Set to 0xFFFFFFFF for internal nodes.
+     */
+    radToLeaf?: Uint32Array;
+
     /**
      * Per-frame update. Call BEFORE SplattingPlugin.updateEffect().
      * Uses the global SplattingPlugin reference if plugin not specified.
@@ -46,6 +59,8 @@ export class BlockLodRenderer {
      * @param dynamicMode  Enable dynamic budget mode. Default true.
      */
     private _logThrottle = 0;
+    /** Performance stats (throttled). */
+    private _pf = { bm: 0, tr: 0, ds: 0, so: 0, count: 0 };
     update(
         camera: PerspectiveCamera,
         splattingPlugin?: __INTERNAL__.SplattingPlugin,
@@ -55,6 +70,8 @@ export class BlockLodRenderer {
         foveated?: Partial<FoveatedConfig>,
         dynamicMode = true,
     ): void {
+        const t0 = performance.now();
+
         const plugin = splattingPlugin ?? __INTERNAL__.getSplattingPlugin();
         if (!plugin) {
             if (this._logThrottle++ % 30 === 0) console.warn('[LOD] plugin undefined');
@@ -63,8 +80,11 @@ export class BlockLodRenderer {
 
         this.texturePool.newFrame();
 
+        const { blockIds: activeBlockIds, weights } = this.blockManager.update(camera);
+        const t1 = performance.now();
+        this._pf.bm += t1 - t0;
+
         const cameraPos = camera.position;
-        const activeBlockIds = this.blockManager.update(cameraPos);
 
         if (activeBlockIds.length === 0) {
             if (this._logThrottle++ % 30 === 0) console.warn('[LOD] no active blocks');
@@ -89,11 +109,69 @@ export class BlockLodRenderer {
             dynamicMode,
         };
 
-        const { order, count } = this.blockTree.traverse(activeBlockIds, config);
+        // Skip traversal if camera hasn't moved significantly
+        const camMoved =
+            cameraPos.distanceToSquared(this._lastCamPos) > 0.0001 ||
+            forward.distanceToSquared(this._lastCamFwd) > 0.0001;
+        this._lastCamPos.copy(cameraPos);
+        this._lastCamFwd.copy(forward);
+
+        let order: Uint32Array;
+        let count: number;
+        if (camMoved || !this._lastOrder) {
+            const result = this.blockTree.traverse(activeBlockIds, config, weights);
+            order = result.order;
+            count = result.count;
+            this._lastOrder = order;
+            this._lastCount = count;
+        } else {
+            order = this._lastOrder!;
+            count = this._lastCount;
+        }
+
+        const t2 = performance.now();
+        this._pf.tr += t2 - t1;
         this.lastSelectedCount = count;
 
         if (count > 0) {
-            plugin.setExternalOrder(order, count);
+            // Ensure order array is large enough for setExternalOrder's w*h requirement
+            const n = Math.ceil(Math.sqrt(count));
+            const w = Math.max(1, 1 << Math.ceil(Math.log2(n)));
+            const h = Math.ceil(count / w);
+            const bufSize = Math.max(count, w * h);
+            const buf = order.length >= bufSize ? order : new Uint32Array(bufSize);
+            if (buf !== order) buf.set(order.subarray(0, count));
+            const t3 = performance.now();
+            this._pf.ds += t3 - t2;
+
+            if (this.radToLeaf) {
+                const map = this.radToLeaf;
+                let leafCount = 0;
+                for (let i = 0; i < count; i++) {
+                    const leafIdx = map[order[i]];
+                    if (leafIdx !== 0xffffffff) {
+                        buf[leafCount++] = leafIdx;
+                    }
+                }
+                if (leafCount > 0) {
+                    plugin.setExternalOrder(buf, leafCount);
+                }
+                this.lastSelectedCount = leafCount;
+            } else {
+                plugin.setExternalOrder(buf, count);
+            }
+            const t4 = performance.now();
+            this._pf.so += t4 - t3;
+            this._pf.count++;
+
+            // Log every 15 frames
+            if (this._pf.count >= 15) {
+                const avg = (v: number) => (v / this._pf.count).toFixed(1);
+                console.log(
+                    `[perf] bm=${avg(this._pf.bm)}ms tr=${avg(this._pf.tr)}ms ds=${avg(this._pf.ds)}ms so=${avg(this._pf.so)}ms`,
+                );
+                this._pf.bm = this._pf.tr = this._pf.ds = this._pf.so = this._pf.count = 0;
+            }
         } else if (this._logThrottle++ % 30 === 0) {
             console.warn('[LOD] traverse 0 for', activeBlockIds.length, 'blocks');
         }

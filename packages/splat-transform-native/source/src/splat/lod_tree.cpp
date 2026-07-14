@@ -506,7 +506,7 @@ static void merge_nodes(
     // New opacity = totalWeight / ellipsoid_area(newScales)
     double newArea = ellipsoid_area(newScale[0], newScale[1], newScale[2]);
     double newOpacity = totalWeight / std::max(newArea, 1e-30);
-    newOpacity = std::min(newOpacity, 1.0);
+    // No clamp — Spark allows opacity > 1.0 for LOD internal nodes
 
     parent.scale[0] = (float)newScale[0];
     parent.scale[1] = (float)newScale[1];
@@ -816,7 +816,9 @@ LodTreeResult build_lod_tree(
         // Remap children
         if (nodes[oldIdx].childCount > 0) {
             uint32_t oldStart = nodes[oldIdx].childStart;
-            result.childStart[i] = oldToNew[oldStart];
+            // oldStart is a position in permuteOrder, not an old index
+            uint32_t firstChildOldIdx = permuteOrder[oldStart];
+            result.childStart[i] = oldToNew[firstChildOldIdx];
             result.childCount[i] = nodes[oldIdx].childCount;
         } else {
             result.childStart[i] = 0;

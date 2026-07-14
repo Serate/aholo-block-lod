@@ -369,6 +369,7 @@ export function setViewerConfig(ctx: Viewer | Viewport, config: IViewerConfig) {
 }
 
 export {
+    __INTERNAL__,
     InstancedBufferGeometry,
     CompressedSplat,
     SuperCompressedSplat,

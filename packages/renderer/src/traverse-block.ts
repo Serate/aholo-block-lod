@@ -190,6 +190,7 @@ export function computePixelScale(
 
 // Module-level cache for dynamic mode's limit across frames
 let _lastDynamicLimit = 0;
+let _tbLog = 0;
 
 /**
  * Internal: BFS traversal with a given pixelScaleLimit.
@@ -270,7 +271,14 @@ function _standardTraverse(
 
         const start = childStart[idx];
         const newTotal = numSplats - 1 + cnt;
-        if (newTotal > maxSplats) break; // entry stays on heap for flush
+        if (newTotal > maxSplats) {
+            // Can't expand → output this node as LOD representation
+            heap.pop();
+            outputIndices[outputCount++] = idx;
+            numSplats--; // node removed from heap without expansion
+            if (outputCount >= maxSplats) return outputCount;
+            continue;
+        }
 
         heap.pop(); // confirm expansion
 
@@ -305,12 +313,10 @@ function _standardTraverse(
         numSplats = newTotal;
     }
 
-    // Flush: only output leaf nodes (skip internal nodes to avoid concentric overlap)
+    // Flush: output all remaining entries (leaf + internal = LOD representations)
     while (heap.size > 0 && outputCount < maxSplats) {
         const entry = heap.pop()!;
-        if (childCount[entry.nodeIndex] === 0) {
-            outputIndices[outputCount++] = entry.nodeIndex;
-        }
+        outputIndices[outputCount++] = entry.nodeIndex;
     }
 
     if (outputCount === 0)
@@ -361,13 +367,13 @@ export function traverseBlock(tree: TreeData, config: TraverseConfig, outputIndi
         );
 
         if (count === 0) {
-            console.warn('[tb] dyn break: count=0', { iter, limit: currentLimit });
+            if (_tbLog++ % 30 === 0) console.warn('[tb] dyn break: count=0', { iter, limit: currentLimit });
             break;
         }
 
         const ratio = count / maxSplats;
         if (ratio >= 0.95 && ratio <= 1.0) {
-            console.log('[tb] dyn converged', { limit: currentLimit, count });
+            if (_tbLog++ % 30 === 0) console.log('[tb] dyn converged', { limit: currentLimit, count });
             _lastDynamicLimit = currentLimit;
             return count;
         }
@@ -377,7 +383,7 @@ export function traverseBlock(tree: TreeData, config: TraverseConfig, outputIndi
         if (currentLimit < pixelScaleLimit) {
             currentLimit = pixelScaleLimit;
             const finalCount = _standardTraverse(tree, currentLimit, maxSplats, config, outputIndices);
-            console.log('[tb] dyn clamped', { limit: currentLimit, count: finalCount });
+            if (_tbLog++ % 30 === 0) console.log('[tb] dyn clamped', { limit: currentLimit, count: finalCount });
             _lastDynamicLimit = currentLimit;
             return finalCount;
         }
@@ -468,7 +474,7 @@ function f16ToF32(h: number): number {
 export function depthSort(
     indices: Uint32Array,
     count: number,
-    centers: Float32Array, // f32[3] × totalNodes
+    centers: Float32Array,
     camX: number,
     camY: number,
     camZ: number,
@@ -478,24 +484,29 @@ export function depthSort(
 ): Uint32Array {
     if (count <= 1) return indices.slice(0, count);
 
-    // Build (z, index) pairs
-    const pairs = new Array<{ z: number; idx: number }>(count);
+    // Build parallel arrays (avoids object allocation)
+    const zs = new Float32Array(count);
+    const order = new Uint32Array(count);
     for (let i = 0; i < count; i++) {
         const idx = indices[i];
         const co = idx * 3;
         const dx = centers[co] - camX;
         const dy = centers[co + 1] - camY;
         const dz = centers[co + 2] - camZ;
-        const z = dx * forwardX + dy * forwardY + dz * forwardZ;
-        pairs[i] = { z, idx };
+        zs[i] = dx * forwardX + dy * forwardY + dz * forwardZ;
+        order[i] = i;
     }
 
-    // Sort descending (far → near for correct blending)
-    pairs.sort((a, b) => b.z - a.z);
+    // Sort indices by z descending
+    order.sort((a, b) => {
+        if (zs[b] > zs[a]) return 1;
+        if (zs[b] < zs[a]) return -1;
+        return 0;
+    });
 
     const sorted = new Uint32Array(count);
     for (let i = 0; i < count; i++) {
-        sorted[i] = pairs[i].idx;
+        sorted[i] = indices[order[i]];
     }
     return sorted;
 }

@@ -6,17 +6,20 @@ export function getStaticPaths() {
 }
 const { lang } = Astro.props;
 ---
-<BaseLayout lang={lang} title="Block Viewer" pageClass="workspace-page viewer-page" workspaceFullscreen>
+<BaseLayout lang={lang} title="BV LOD Test (Step 3d)" pageClass="workspace-page viewer-page" workspaceFullscreen>
 <main style="width:100%;height:100vh;background:#000"><div id="vp" style="width:100%;height:100%"></div>
 <div style="position:absolute;top:12px;left:12px;color:#fff;font:13px/1.6 system-ui;pointer-events:none;z-index:10" id="st">Loading...</div>
 <output style="position:absolute;bottom:12px;right:12px;color:#0f0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="fps">0</output>
-<output style="position:absolute;bottom:32px;right:12px;color:#0f0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="gscount">0 GS</output></main>
+<output style="position:absolute;bottom:32px;right:12px;color:#0f0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="gscount">0 GS</output>
+<output style="position:absolute;bottom:52px;right:12px;color:#ff0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="dbg">-</output></main>
 <script type="module">
 import { createViewer, Scene3D, PerspectiveCamera, SplatUtils, setViewerConfig, BackgroundMode, Color, Vector3 } from '@manycore/aholo-viewer';
 import { SplatLoader } from '@manycore/aholo-viewer';
+import { decodeRad, decodedBlockToSplatData } from '@manycore/aholo-viewer';
+import { BlockLodRenderer, BlockState } from '@manycore/aholo-viewer';
 import { CameraControl } from '../../client/camera-control.js';
 import { syncCameraAspect } from '../../client/rendering.js';
-const { SplatFileType, SplatPackType, parseSplatData } = SplatLoader;
+const { SuperCompressedSplatData } = SplatLoader;
 const { createSplat } = SplatUtils;
 
 const surface = document.getElementById('vp');
@@ -50,7 +53,6 @@ setViewerConfig(v, {
   },
 });
 
-// FPS counter
 const fpsEl = document.getElementById('fps');
 const FPS_DISPLAY_INTERVAL_MS = 250;
 const FPS_SMOOTHING_FACTOR = 0.08;
@@ -68,10 +70,64 @@ function updateFps() {
   }
 }
 
-// GS count display
 const gsEl = document.getElementById('gscount');
+const dbgEl = document.getElementById('dbg');
+const st = document.getElementById('st');
 
-// Render loop — render every rAF tick
+// ============================================================
+// Step 3d: ALL-nodes SplatData + new flush (output node when budget tight)
+// No radToLeaf — internal nodes rendered as LOD representations
+// ============================================================
+const meta = await (await fetch('/block-data/lod-meta.json')).json();
+const totalTreeNodes = meta.totalTreeNodes;
+st.textContent = `Loading rad...`;
+
+const radBuffers = await Promise.all(
+  meta.tree.map((_, i) => fetch(`/block-data/block_${i}.rad`).then(r => r.arrayBuffer()))
+);
+const decodedBlocks = await Promise.all(
+  radBuffers.map(buf => decodeRad(new Uint8Array(buf)))
+);
+
+// Build ALL-nodes SplatData (7.8M, leaf+internal)
+st.textContent = `Building splat (${totalTreeNodes} nodes)...`;
+const scd = new SuperCompressedSplatData();
+scd.init(totalTreeNodes, 0);
+
+let gIdx = 0;
+for (let bi = 0; bi < decodedBlocks.length; bi++) {
+  const db = decodedBlocks[bi];
+  const { table } = decodedBlockToSplatData(db);
+  for (let i = 0; i < db.totalNodes; i++) {
+    scd.setCenter(gIdx, table[0][i], table[1][i], table[2][i]);
+    scd.setScale(gIdx, table[3][i], table[4][i], table[5][i]);
+    scd.setQuat(gIdx, table[6][i], table[7][i], table[8][i], table[9][i]);
+    scd.setColor(gIdx, table[10][i], table[11][i], table[12][i]);
+    scd.setAlpha(gIdx, table[13][i] * 2);
+    gIdx++;
+  }
+}
+st.textContent = `createSplat...`;
+const splat = await createSplat(scd);
+sc.add(splat);
+
+// Setup BlockRenderer — no radToLeaf (traverse outputs reference 7.8M SplatData directly)
+st.textContent = `Registering ${decodedBlocks.length} blocks...`;
+const blockRenderer = new BlockLodRenderer({ maxActiveBlocks: 22 });
+let nodeOffset = 0;
+for (let bi = 0; bi < decodedBlocks.length; bi++) {
+  blockRenderer.blockTree.addBlock(decodedBlocks[bi], nodeOffset);
+  nodeOffset += decodedBlocks[bi].totalNodes;
+}
+blockRenderer.blockTree.initWasm();
+blockRenderer.blockManager.init(meta.tree);
+for (const b of blockRenderer.blockManager.blocks) b.state = BlockState.Active;
+
+sc.notifySceneChange();
+v.render(performance.now(), cam);
+st.textContent = `${totalTreeNodes} nodes, ${decodedBlocks.length} blocks`;
+
+// ---- Render loop with LOD ----
 let rafId;
 let lastTime = 0;
 function frame(time) {
@@ -83,32 +139,12 @@ function frame(time) {
     syncCameraAspect(cam, v);
     sc.notifySceneChange();
   }
+  blockRenderer.update(cam, undefined, 500000, 1.0, 0.02, undefined, false);
   v.render(time, cam);
   updateFps();
-  gsEl.textContent = sc.splatManager.totalCount.toLocaleString() + ' GS';
+  gsEl.textContent = blockRenderer.lastSelectedCount.toLocaleString() + ' GS';
+  dbgEl.textContent = `LOD selected: ${blockRenderer.lastSelectedCount}`;
 }
 rafId = requestAnimationFrame(frame);
-
-const st = document.getElementById('st');
-const meta = await (await fetch('/block-data/lod-meta.json')).json();
-st.textContent = `Loading ${meta.tree.length} blocks...`;
-
-const chunks = await Promise.all(
-  meta.files.map(f => fetch('/block-data/' + f).then(r => r.arrayBuffer()))
-);
-const totalSize = chunks.reduce((s, c) => s + c.byteLength, 0);
-const merged = new Uint8Array(totalSize);
-let off = 0;
-for (const chunk of chunks) {
-  merged.set(new Uint8Array(chunk), off);
-  off += chunk.byteLength;
-}
-const splatData = await parseSplatData(SplatFileType.SPLAT, new File([merged], 'merged.splat'), SplatPackType.SuperCompressed, { maxShDegree: 3, maxTextureSize: 8192 });
-const splat = await createSplat(splatData);
-sc.add(splat);
-
-st.textContent = `${meta.tree.length} blocks, ${meta.counts} GS`;
-sc.notifySceneChange();
-v.render(performance.now(), cam);
 </script>
 </BaseLayout>
