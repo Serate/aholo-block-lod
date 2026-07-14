@@ -14,9 +14,11 @@ const { lang } = Astro.props;
 <script type="module">
 import { createViewer, Scene3D, PerspectiveCamera, SplatUtils, setViewerConfig, BackgroundMode, Color, Vector3 } from '@manycore/aholo-viewer';
 import { SplatLoader } from '@manycore/aholo-viewer';
+import { decodeRad, decodedBlockToSplatData } from '@manycore/aholo-viewer';
+import { BlockLodRenderer, BlockState } from '@manycore/aholo-viewer';
 import { CameraControl } from '../../client/camera-control.js';
 import { syncCameraAspect } from '../../client/rendering.js';
-const { SplatFileType, SplatPackType, parseSplatData } = SplatLoader;
+const { SuperCompressedSplatData } = SplatLoader;
 const { createSplat } = SplatUtils;
 
 const surface = document.getElementById('vp');
@@ -50,7 +52,6 @@ setViewerConfig(v, {
   },
 });
 
-// FPS counter
 const fpsEl = document.getElementById('fps');
 const FPS_DISPLAY_INTERVAL_MS = 250;
 const FPS_SMOOTHING_FACTOR = 0.08;
@@ -68,10 +69,76 @@ function updateFps() {
   }
 }
 
-// GS count display
 const gsEl = document.getElementById('gscount');
+const st = document.getElementById('st');
 
-// Render loop — render every rAF tick
+// ============================================================
+// Pipeline:
+//   .rad → decodeRad → ALL nodes (leaf+internal) in SplatData
+//   BlockTree uses .rad tree data for LOD traversal
+//   setExternalOrder selects only leaf nodes (flush fix)
+// ============================================================
+
+const meta = await (await fetch('/block-data/lod-meta.json')).json();
+const totalTreeNodes = meta.totalTreeNodes;
+st.textContent = `Loading ${meta.tree.length} rad...`;
+
+// Load & decode
+const radBuffers = await Promise.all(
+  meta.tree.map((_, i) => fetch(`/block-data/block_${i}.rad`).then(r => r.arrayBuffer()))
+);
+st.textContent = `Decoding...`;
+const decodedBlocks = await Promise.all(
+  radBuffers.map(buf => decodeRad(new Uint8Array(buf)))
+);
+
+// Build merged SuperCompressedSplatData with ALL nodes (leaf + internal)
+st.textContent = `Building ${totalTreeNodes} nodes...`;
+const scd = new SuperCompressedSplatData();
+scd.init(totalTreeNodes, 0);
+let globalIdx = 0;
+
+for (let bi = 0; bi < decodedBlocks.length; bi++) {
+  const db = decodedBlocks[bi];
+  const { table } = decodedBlockToSplatData(db);
+  for (let i = 0; i < db.totalNodes; i++) {
+    scd.setCenter(globalIdx, table[0][i], table[1][i], table[2][i]);
+    scd.setScale(globalIdx, table[3][i], table[4][i], table[5][i]);
+    scd.setQuat(globalIdx, table[6][i], table[7][i], table[8][i], table[9][i]);
+    scd.setColor(globalIdx, table[10][i], table[11][i], table[12][i]);
+    scd.setAlpha(globalIdx, table[13][i] * 2);
+    globalIdx++;
+  }
+}
+
+st.textContent = `createSplat...`;
+const splat = await createSplat(scd);
+sc.add(splat);
+
+// Register BlockTree with nodeOffset per block
+st.textContent = `Registering ${decodedBlocks.length} blocks...`;
+const blockRenderer = new BlockLodRenderer();
+let nodeOffset = 0;
+for (let bi = 0; bi < decodedBlocks.length; bi++) {
+  blockRenderer.blockTree.addBlock(decodedBlocks[bi], nodeOffset);
+  nodeOffset += decodedBlocks[bi].totalNodes;
+}
+
+blockRenderer.blockManager.init(meta.tree);
+for (const b of blockRenderer.blockManager.blocks) {
+  b.state = BlockState.Active;
+}
+
+sc.notifySceneChange();
+v.render(performance.now(), cam);
+
+// Do a test update to verify plugin availability
+blockRenderer.update(cam, undefined, 500000, 1.0, 0.001, undefined, true);
+console.log('After first render: lastSelectedCount =', blockRenderer.lastSelectedCount);
+
+st.textContent = `${meta.tree.length} blocks, ${totalTreeNodes} nodes in GPU`;
+
+// ---- Render loop with LOD ----
 let rafId;
 let lastTime = 0;
 function frame(time) {
@@ -83,32 +150,14 @@ function frame(time) {
     syncCameraAspect(cam, v);
     sc.notifySceneChange();
   }
+
+  // LOD traversal + setExternalOrder
+  blockRenderer.update(cam, undefined, 500000, 1.0, 0.001, undefined, false);
+
   v.render(time, cam);
   updateFps();
-  gsEl.textContent = sc.splatManager.totalCount.toLocaleString() + ' GS';
+  gsEl.textContent = (blockRenderer.lastSelectedCount || totalTreeNodes).toLocaleString() + ' GS';
 }
 rafId = requestAnimationFrame(frame);
-
-const st = document.getElementById('st');
-const meta = await (await fetch('/block-data/lod-meta.json')).json();
-st.textContent = `Loading ${meta.tree.length} blocks...`;
-
-const chunks = await Promise.all(
-  meta.files.map(f => fetch('/block-data/' + f).then(r => r.arrayBuffer()))
-);
-const totalSize = chunks.reduce((s, c) => s + c.byteLength, 0);
-const merged = new Uint8Array(totalSize);
-let off = 0;
-for (const chunk of chunks) {
-  merged.set(new Uint8Array(chunk), off);
-  off += chunk.byteLength;
-}
-const splatData = await parseSplatData(SplatFileType.SPLAT, new File([merged], 'merged.splat'), SplatPackType.SuperCompressed, { maxShDegree: 3, maxTextureSize: 8192 });
-const splat = await createSplat(splatData);
-sc.add(splat);
-
-st.textContent = `${meta.tree.length} blocks, ${meta.counts} GS`;
-sc.notifySceneChange();
-v.render(performance.now(), cam);
 </script>
 </BaseLayout>

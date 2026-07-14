@@ -215,6 +215,8 @@ const lodMeta = {
     shDegree: 0,
     levels: 5,
     files: outputBlocks.map(b => `block_${b.file}.splat`),
+    radFiles: outputBlocks.map(b => `block_${b.file}.rad`),
+    treeNodes: outputBlocks.map(b => b.treeNodeCount),
     tree: outputBlocks.map(b => ({
         bound: b.bound,
         file: b.file,

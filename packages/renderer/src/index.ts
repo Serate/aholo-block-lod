@@ -89,7 +89,7 @@ import { BlockManager, BlockState, type BlockMeta, type BlockHandle } from './bl
 import { BlockTree, type DecodedBlock } from './block-tree.js';
 import { BlockLodRenderer } from './block-renderer.js';
 import { decodeRad, decodedBlockToSplatData, f16ToF32 } from './rad-decoder-browser.js';
-import { traverseBlock, computeFeatureSizes } from './traverse-block.js';
+import { traverseBlock, computeFeatureSizes, computePixelScale, prepareTreeData, depthSort } from './traverse-block.js';
 
 import {
     Application,
@@ -389,7 +389,10 @@ export {
     f16ToF32,
     traverseBlock,
     computeFeatureSizes,
+    computePixelScale,
+    prepareTreeData,
+    depthSort,
 };
 
 export type { BlockMeta, BlockHandle, DecodedBlock };
-export type { TreeData, TraverseResult } from './traverse-block.js';
+export type { TreeData, TraverseResult, TraverseConfig, FoveatedConfig } from './traverse-block.js';

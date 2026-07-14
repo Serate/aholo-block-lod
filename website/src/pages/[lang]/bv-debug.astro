@@ -1,0 +1,172 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { locales } from '../../i18n/locales.js';
+export function getStaticPaths() {
+  return locales.map(l => ({ params: { lang: l.code }, props: { lang: l.code } }));
+}
+const { lang } = Astro.props;
+---
+<BaseLayout lang={lang} title="BV Debug" pageClass="workspace-page viewer-page" workspaceFullscreen>
+<main style="width:100%;height:100vh;background:#000"><div id="vp" style="width:100%;height:100%"></div>
+<div style="position:absolute;top:12px;left:12px;color:#fff;font:13px/1.6 system-ui;pointer-events:none;z-index:10" id="st">Loading...</div>
+<output style="position:absolute;bottom:12px;right:12px;color:#0f0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="fps">0</output>
+<output style="position:absolute;bottom:32px;right:12px;color:#0f0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="gscount">0 GS</output>
+<output style="position:absolute;bottom:52px;right:12px;color:#ff0;font:13px/1.6 monospace;pointer-events:none;z-index:10" id="dbg">-</output></main>
+<script type="module">
+import { createViewer, Scene3D, PerspectiveCamera, SplatUtils, setViewerConfig, BackgroundMode, Color, Vector3 } from '@manycore/aholo-viewer';
+import { SplatLoader } from '@manycore/aholo-viewer';
+import { decodeRad } from '@manycore/aholo-viewer';
+import { BlockTree, BlockLodRenderer, BlockState } from '@manycore/aholo-viewer';
+import { CameraControl } from '../../client/camera-control.js';
+import { syncCameraAspect } from '../../client/rendering.js';
+const { SplatFileType, SplatPackType, parseSplatData, SuperCompressedSplatData } = SplatLoader;
+const { createSplat } = SplatUtils;
+
+const surface = document.getElementById('vp');
+const v = createViewer('bv', surface, { antialiasing: false });
+const sc = new Scene3D(); v.setScene(sc);
+const cam = new PerspectiveCamera(60, 1, 0.1, 2000);
+cam.up.set(0, -1, 0);
+cam.position.set(0, -1.2, 3);
+cam.lookAt(new Vector3(0, 0, 0));
+cam.far = 2000;
+cam.updateProjectionMatrix();
+v.setCamera(cam);
+const control = new CameraControl(cam, surface, { enabled: true, orbitCenter: { x: 0, y: 0, z: 0 } });
+
+setViewerConfig(v, {
+  pixelRatio: 1 / window.devicePixelRatio,
+  pipeline: {
+    Background: {
+      background: { active: BackgroundMode.BasicBackground, basic: { color: new Color(0, 0, 0), alpha: 1 } },
+      ground: { enabled: false },
+    },
+    Splatting: {
+      enabled: true,
+      pack: { highPrecisionEnabled: false, precalculateEnabled: true, cameraRelativeEnabled: true, sortedLayoutEnabled: false },
+      raster: { normalizedFalloff: false, preBlurAmount: 0.3, blurAmount: 0, focalAdjustment: 2, detailCullingThreshold: 1, maxPixelRadius: 1024, maxStdDev: Math.sqrt(8) },
+      sort: { highPrecisionEnabled: false, minIntervalMs: 0, sortSplatDistance: 0.1, sortSplatCoorient: 0.99999, sortCameraDistance: 1, sortCameraCoorient: 0.99 },
+      composite: { enabled: false, highPrecisionEnabled: false },
+      toneMapping: { enabled: false, toneMapping: 'Linear', exposure: 1 },
+      highlightKernel: { enabled: false, size: 2, color: '#0000ff' },
+    },
+  },
+});
+
+const fpsEl = document.getElementById('fps');
+const FPS_DISPLAY_INTERVAL_MS = 250;
+const FPS_SMOOTHING_FACTOR = 0.08;
+let fpsLastFrame = 0, fpsLastDisplay = 0, fpsSmoothed = 0;
+function updateFps() {
+  const now = performance.now();
+  if (!fpsLastFrame) { fpsLastFrame = now; fpsLastDisplay = now; return; }
+  const fd = Math.max(1, now - fpsLastFrame);
+  const fps = 1000 / fd;
+  fpsLastFrame = now;
+  fpsSmoothed = fpsSmoothed === 0 ? fps : fpsSmoothed + (fps - fpsSmoothed) * FPS_SMOOTHING_FACTOR;
+  if (now - fpsLastDisplay >= FPS_DISPLAY_INTERVAL_MS) {
+    fpsEl.textContent = String(Math.round(fpsSmoothed));
+    fpsLastDisplay = now;
+  }
+}
+
+const gsEl = document.getElementById('gscount');
+const dbgEl = document.getElementById('dbg');
+
+const st = document.getElementById('st');
+const meta = await (await fetch('/block-data/lod-meta.json')).json();
+st.textContent = `B0 debug...`;
+
+// ============================================
+// DEBUG: Load just Block 0, inspect raw data
+// ============================================
+const rad0 = await fetch('/block-data/block_0.rad').then(r => r.arrayBuffer());
+const d0 = await decodeRad(new Uint8Array(rad0));
+console.log('=== Block 0 decoded ===');
+console.log('totalNodes:', d0.totalNodes, 'count:', d0.count);
+console.log('center f16 (first 3):', d0.center[0], d0.center[1], d0.center[2]);
+console.log('scale u8 (first 3):', d0.scale[0], d0.scale[1], d0.scale[2]);
+console.log('quat u8 (first 3):', d0.quat[0], d0.quat[1], d0.quat[2]);
+console.log('rgba u8 (first):', d0.rgba[0], d0.rgba[1], d0.rgba[2], d0.rgba[3]);
+
+// Show leaf node at end
+const lastLeafIdx = d0.totalNodes - 2;
+console.log('last leaf center f16:', d0.center[lastLeafIdx*3], d0.center[lastLeafIdx*3+1], d0.center[lastLeafIdx*3+2]);
+console.log('last leaf childCount:', d0.childCount[lastLeafIdx]);
+
+// Root node (last)
+const rootIdx = d0.totalNodes - 1;
+console.log('root childStart:', d0.childStart[rootIdx], 'childCount:', d0.childCount[rootIdx]);
+
+// Build a SuperCompressedSplatData for Block 0 using decodedBlockToSplatData + set* methods
+const { decodedBlockToSplatData } = await import('@manycore/aholo-viewer');
+const { table } = decodedBlockToSplatData(d0);
+console.log('=== Decoded to f32 tables ===');
+console.log('center f32 (first):', table[0][0], table[1][0], table[2][0]);
+console.log('scale f32 (first):', table[3][0], table[4][0], table[5][0]);
+console.log('quat f32 (first):', table[6][0], table[7][0], table[8][0], table[9][0]);
+console.log('rgba f32 (first):', table[10][0], table[11][0], table[12][0], table[13][0]);
+
+// Render using set* API for Block 0 — LEAF NODES ONLY (childCount === 0)
+st.textContent = `Building SC splat for block 0 leaves...`;
+const leafCount = d0.childCount.filter(c => c === 0).length;
+console.log('Block 0: totalNodes', d0.totalNodes, 'leaves:', leafCount);
+
+const scd = new SuperCompressedSplatData();
+scd.init(leafCount, 0);
+let writeIdx = 0;
+for (let i = 0; i < d0.totalNodes; i++) {
+  if (d0.childCount[i] !== 0) continue; // skip internal nodes
+  scd.setCenter(writeIdx, table[0][i], table[1][i], table[2][i]);
+  scd.setScale(writeIdx, table[3][i], table[4][i], table[5][i]);
+  scd.setQuat(writeIdx, table[6][i], table[7][i], table[8][i], table[9][i]);
+  scd.setColor(writeIdx, table[10][i], table[11][i], table[12][i]);
+  scd.setAlpha(writeIdx, table[13][i] * 2); // alpha compensation
+  writeIdx++;
+}
+console.log('Actual leaves written:', writeIdx);
+st.textContent = `createSplat block 0 (${leafCount} leaves)...`;
+const splat0 = await createSplat(scd);
+sc.add(splat0);
+
+// Also add the original .splat data (full scene) for comparison, offset to the side
+st.textContent = `Loading .splat reference...`;
+const splatChunks = await Promise.all(
+  meta.files.map(f => fetch('/block-data/' + f).then(r => r.arrayBuffer()))
+);
+const totalBytes = splatChunks.reduce((s, c) => s + c.byteLength, 0);
+const merged = new Uint8Array(totalBytes);
+let off = 0;
+for (const chunk of splatChunks) {
+  merged.set(new Uint8Array(chunk), off);
+  off += chunk.byteLength;
+}
+const refData = await parseSplatData(SplatFileType.SPLAT, new File([merged], 'merged.splat'), SplatPackType.SuperCompressed, { maxShDegree: 3, maxTextureSize: 8192 });
+const refSplat = await createSplat(refData);
+sc.add(refSplat);
+
+st.textContent = `Block0 set* + reference splat loaded`;
+dbgEl.textContent = `block0:${d0.totalNodes}nodes ref:${meta.counts}GS`;
+
+sc.notifySceneChange();
+v.render(performance.now(), cam);
+
+// ---- Render loop ----
+let rafId;
+let lastTime = 0;
+function frame(time) {
+  rafId = requestAnimationFrame(frame);
+  const delta = Math.min((time - lastTime) / 1000, 0.1);
+  lastTime = time;
+  const moved = control.update(delta);
+  if (moved) {
+    syncCameraAspect(cam, v);
+    sc.notifySceneChange();
+  }
+  v.render(time, cam);
+  updateFps();
+  gsEl.textContent = sc.splatManager.totalCount.toLocaleString() + ' GS';
+}
+rafId = requestAnimationFrame(frame);
+</script>
+</BaseLayout>

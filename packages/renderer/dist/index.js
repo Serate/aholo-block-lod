@@ -66888,23 +66888,75 @@ var MaxHeap = class {
   }
 };
 var heap = new MaxHeap();
-function computePixelScale(cx, cy, cz, featureSize, camX, camY, camZ, lodScale) {
+function computePixelScale(cx, cy, cz, featureSize, camX, camY, camZ, forwardX, forwardY, forwardZ, lodScale, foveated) {
   const dx = cx - camX;
   const dy = cy - camY;
   const dz = cz - camZ;
   const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
   if (dist < 1e-6) return featureSize / 1e-6 * lodScale;
-  return featureSize / dist * lodScale;
+  let scale2 = featureSize / dist * lodScale;
+  const dotFwd = dx * forwardX + dy * forwardY + dz * forwardZ;
+  if (dotFwd < 0) {
+    const behindFoveate = foveated?.behindFoveate ?? 0.1;
+    scale2 *= behindFoveate;
+    return scale2;
+  }
+  if (foveated) {
+    const coneFov0 = foveated.coneFov0 ?? 5;
+    const coneFov = foveated.coneFov ?? 30;
+    const behindFoveate = foveated.behindFoveate ?? 0.1;
+    const cosAngle = dotFwd / dist;
+    const angle = Math.acos(Math.min(1, Math.max(-1, cosAngle))) * (180 / Math.PI);
+    if (angle > coneFov0) {
+      if (angle >= coneFov) {
+        scale2 *= behindFoveate;
+      } else {
+        const t = (angle - coneFov0) / (coneFov - coneFov0);
+        scale2 *= 1 - t + t * behindFoveate;
+      }
+    }
+  }
+  return scale2;
 }
-function traverseBlock(tree, cameraPos2, _cameraForward, lodScale, pixelScaleLimit, maxSplats) {
+var _lastDynamicLimit = 0;
+function _standardTraverse(tree, pixelScaleLimit, maxSplats, config, outputIndices) {
   const { totalNodes, childStart, childCount, centers, featureSizes } = tree;
-  if (totalNodes === 0 || maxSplats === 0) return { indices: new Uint32Array(0), count: 0 };
-  const [camX, camY, camZ] = cameraPos2;
-  const indices = new Uint32Array(Math.min(totalNodes, maxSplats));
+  if (totalNodes === 0 || maxSplats === 0) return 0;
+  const [camX, camY, camZ] = config.cameraPos;
+  const [fwdX, fwdY, fwdZ] = config.cameraForward;
+  const foveated = config.foveated;
+  const lodScale = config.lodScale;
   let outputCount = 0;
   heap.clear();
-  const rootPs = computePixelScale(centers[0], centers[1], centers[2], featureSizes[0], camX, camY, camZ, lodScale);
-  heap.push({ pixelScale: rootPs, nodeIndex: 0 });
+  const rootIdx = totalNodes - 1;
+  const rootPs = computePixelScale(
+    centers[rootIdx * 3],
+    centers[rootIdx * 3 + 1],
+    centers[rootIdx * 3 + 2],
+    featureSizes[rootIdx],
+    camX,
+    camY,
+    camZ,
+    fwdX,
+    fwdY,
+    fwdZ,
+    lodScale,
+    foveated
+  );
+  if (!isFinite(rootPs) || rootPs <= 0) {
+    console.warn("[traverse] root invalid:", {
+      block: tree.totalNodes,
+      rootIdx,
+      rootPs,
+      fs: featureSizes[rootIdx],
+      cx: centers[rootIdx * 3],
+      cy: centers[rootIdx * 3 + 1],
+      cz: centers[rootIdx * 3 + 2]
+    });
+  } else if (rootPs < 0.01) {
+    console.warn("[traverse] root too small:", { rootPs, fs: featureSizes[rootIdx], limit: pixelScaleLimit });
+  }
+  heap.push({ pixelScale: rootPs, nodeIndex: rootIdx });
   let numSplats = 1;
   while (heap.size > 0 && outputCount < maxSplats) {
     const entry = heap.peek();
@@ -66913,7 +66965,7 @@ function traverseBlock(tree, cameraPos2, _cameraForward, lodScale, pixelScaleLim
     const cnt = childCount[idx];
     if (cnt === 0) {
       heap.pop();
-      indices[outputCount++] = idx;
+      outputIndices[outputCount++] = idx;
       continue;
     }
     const start2 = childStart[idx];
@@ -66931,13 +66983,17 @@ function traverseBlock(tree, cameraPos2, _cameraForward, lodScale, pixelScaleLim
         camX,
         camY,
         camZ,
-        lodScale
+        fwdX,
+        fwdY,
+        fwdZ,
+        lodScale,
+        foveated
       );
       if (ps <= pixelScaleLimit) {
-        indices[outputCount++] = childIdx;
+        outputIndices[outputCount++] = childIdx;
         if (outputCount >= maxSplats) {
           numSplats = newTotal;
-          return { indices, count: outputCount };
+          return outputCount;
         }
       } else {
         heap.push({ pixelScale: ps, nodeIndex: childIdx });
@@ -66947,9 +67003,56 @@ function traverseBlock(tree, cameraPos2, _cameraForward, lodScale, pixelScaleLim
   }
   while (heap.size > 0 && outputCount < maxSplats) {
     const entry = heap.pop();
-    indices[outputCount++] = entry.nodeIndex;
+    if (childCount[entry.nodeIndex] === 0) {
+      outputIndices[outputCount++] = entry.nodeIndex;
+    }
   }
-  return { indices, count: outputCount };
+  if (outputCount === 0) console.warn("[traverse] exit 0:", { limit: pixelScaleLimit, max: maxSplats, rootPs, heapSize: heap.size });
+  return outputCount;
+}
+function traverseBlock(tree, config, outputIndices) {
+  if (tree.totalNodes === 0 || config.maxSplats === 0) {
+    console.warn("[tb] skip: empty", { nodes: tree.totalNodes, max: config.maxSplats });
+    return 0;
+  }
+  if (!config.dynamicMode) {
+    const c = _standardTraverse(tree, config.pixelScaleLimit, config.maxSplats, config, outputIndices);
+    console.log("[tb] standard:", { nodes: tree.totalNodes, limit: config.pixelScaleLimit, max: config.maxSplats, count: c });
+    return c;
+  }
+  const pixelScaleLimit = config.pixelScaleLimit;
+  const maxSplats = config.maxSplats;
+  let currentLimit = _lastDynamicLimit > pixelScaleLimit ? _lastDynamicLimit : pixelScaleLimit * 100;
+  let lastCount = 0;
+  const MAX_ITER = 5;
+  for (let iter2 = 0; iter2 < MAX_ITER; iter2++) {
+    const t0 = performance.now();
+    const count = _standardTraverse(tree, currentLimit, maxSplats, config, outputIndices);
+    const dt = performance.now() - t0;
+    console.log(`[tb] dyn iter ${iter2}: limit=${currentLimit.toFixed(6)} count=${count} max=${maxSplats} dt=${dt.toFixed(1)}ms`);
+    if (count === 0) {
+      console.warn("[tb] dyn break: count=0", { iter: iter2, limit: currentLimit });
+      break;
+    }
+    const ratio = count / maxSplats;
+    if (ratio >= 0.95 && ratio <= 1) {
+      console.log("[tb] dyn converged", { limit: currentLimit, count });
+      _lastDynamicLimit = currentLimit;
+      return count;
+    }
+    currentLimit *= Math.pow(ratio, 0.5);
+    if (currentLimit < pixelScaleLimit) {
+      currentLimit = pixelScaleLimit;
+      const finalCount = _standardTraverse(tree, currentLimit, maxSplats, config, outputIndices);
+      console.log("[tb] dyn clamped", { limit: currentLimit, count: finalCount });
+      _lastDynamicLimit = currentLimit;
+      return finalCount;
+    }
+    lastCount = count;
+  }
+  console.warn("[tb] dyn fallback", { lastCount, limit: currentLimit });
+  _lastDynamicLimit = currentLimit;
+  return lastCount;
 }
 function computeFeatureSizes(scale2, totalNodes) {
   const sizes = new Float32Array(totalNodes);
@@ -66967,6 +67070,222 @@ function ln0r8ToF32(u, lnMin = -12, lnMax = 9) {
   const ln = u / 255 * (lnMax - lnMin) + lnMin;
   return Math.exp(ln);
 }
+function prepareTreeData(center2, scale2, childStart, childCount, totalNodes) {
+  const centers = new Float32Array(totalNodes * 3);
+  for (let i2 = 0; i2 < totalNodes; i2++) {
+    centers[i2 * 3] = f16ToF32(center2[i2 * 3]);
+    centers[i2 * 3 + 1] = f16ToF32(center2[i2 * 3 + 1]);
+    centers[i2 * 3 + 2] = f16ToF32(center2[i2 * 3 + 2]);
+  }
+  const featureSizes = computeFeatureSizes(scale2, totalNodes);
+  return { totalNodes, childStart, childCount, centers, featureSizes };
+}
+function f16ToF32(h) {
+  const sign = (h & 32768) << 16;
+  let exp = h >> 10 & 31;
+  let mant = h & 1023;
+  if (exp === 0) {
+    exp = 1;
+    while (!(mant & 1024) && mant) {
+      mant <<= 1;
+      exp--;
+    }
+    mant &= 1023;
+    exp += 112;
+  } else if (exp === 31) {
+    exp = 255;
+  } else {
+    exp += 112;
+  }
+  const bits2 = sign | exp << 23 | mant << 13;
+  const u32 = new Uint32Array(1);
+  u32[0] = bits2;
+  return new Float32Array(u32.buffer)[0];
+}
+function depthSort(indices, count, centers, camX, camY, camZ, forwardX, forwardY, forwardZ) {
+  if (count <= 1) return indices.slice(0, count);
+  const pairs = new Array(count);
+  for (let i2 = 0; i2 < count; i2++) {
+    const idx = indices[i2];
+    const co = idx * 3;
+    const dx = centers[co] - camX;
+    const dy = centers[co + 1] - camY;
+    const dz = centers[co + 2] - camZ;
+    const z2 = dx * forwardX + dy * forwardY + dz * forwardZ;
+    pairs[i2] = { z: z2, idx };
+  }
+  pairs.sort((a, b) => b.z - a.z);
+  const sorted = new Uint32Array(count);
+  for (let i2 = 0; i2 < count; i2++) {
+    sorted[i2] = pairs[i2].idx;
+  }
+  return sorted;
+}
+
+// src/block-tree.ts
+var BlockTree = class {
+  constructor() {
+    this.blocks = [];
+    this.treeDataCache = [];
+    /** Global index offset for each block's first node in the merged SplatData. */
+    this.nodeOffsets = [];
+    /** Accumulated centers chunks for depthSort (global). */
+    this.centerChunks = [];
+    /** Total nodes across all registered blocks. */
+    this.totalNodes = 0;
+  }
+  /**
+   * Register a decoded block.
+   * @param data  Decoded block data from decodeRad().
+   * @param nodeOffset  Global index of this block's first node in the merged SplatData.
+   */
+  addBlock(data, nodeOffset) {
+    this.blocks.push(data);
+    this.nodeOffsets.push(nodeOffset);
+    const td2 = prepareTreeData(data.center, data.scale, data.childStart, data.childCount, data.totalNodes);
+    this.treeDataCache.push(td2);
+    this.centerChunks.push(td2.centers);
+    this.totalNodes += td2.totalNodes;
+  }
+  clear() {
+    this.blocks.length = 0;
+    this.treeDataCache.length = 0;
+    this.nodeOffsets.length = 0;
+    this.centerChunks.length = 0;
+    this.totalNodes = 0;
+  }
+  /**
+   * Traverse active blocks and produce a merged, depth-sorted ordering array.
+   *
+   * Each block receives an equal share of the maxSplats budget.
+   * Output indices are global (zero-based across the merged SplatData)
+   * and sorted far→near for correct transparency blending.
+   */
+  traverse(activeBlockIds, config) {
+    if (activeBlockIds.length === 0 || config.maxSplats === 0) {
+      return { order: new Uint32Array(0), count: 0 };
+    }
+    const allChunks = [];
+    let total = 0;
+    const numBlocks = Math.max(1, activeBlockIds.length);
+    const perBlockBudget = Math.ceil(config.maxSplats / numBlocks);
+    for (const blockId of activeBlockIds) {
+      const td2 = this.treeDataCache[blockId];
+      if (!td2) {
+        console.warn("[bt] no TreeData for block", blockId);
+        continue;
+      }
+      const budget = Math.min(perBlockBudget, td2.totalNodes);
+      const outputIndices = new Uint32Array(budget);
+      const blockConfig = { ...config, maxSplats: budget };
+      const t0 = performance.now();
+      const count = traverseBlock(td2, blockConfig, outputIndices);
+      const dt = performance.now() - t0;
+      console.log(`[bt] block ${blockId}: budget=${budget} count=${count} dt=${dt.toFixed(0)}ms`);
+      if (count > 0) {
+        const offset2 = this.nodeOffsets[blockId] ?? 0;
+        if (offset2 > 0) {
+          for (let i2 = 0; i2 < count; i2++) {
+            outputIndices[i2] += offset2;
+          }
+        }
+        allChunks.push(outputIndices.subarray(0, count));
+        total += count;
+      }
+    }
+    if (total === 0) {
+      return { order: new Uint32Array(0), count: 0 };
+    }
+    const merged = new Uint32Array(total);
+    let offset = 0;
+    for (const chunk of allChunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    const fullCenters = this._buildFullCenters();
+    const [camX, camY, camZ] = config.cameraPos;
+    const [fwdX, fwdY, fwdZ] = config.cameraForward;
+    const sorted = depthSort(merged, total, fullCenters, camX, camY, camZ, fwdX, fwdY, fwdZ);
+    return { order: sorted, count: total };
+  }
+  /** Concatenate all center chunks into one Float32Array for depth sorting. */
+  _buildFullCenters() {
+    if (this.centerChunks.length === 0) return new Float32Array(0);
+    if (this.centerChunks.length === 1) return this.centerChunks[0];
+    let totalLen = 0;
+    for (const c of this.centerChunks) totalLen += c.length;
+    const full = new Float32Array(totalLen);
+    let off = 0;
+    for (const c of this.centerChunks) {
+      full.set(c, off);
+      off += c.length;
+    }
+    return full;
+  }
+};
+
+// src/block-renderer.ts
+var BlockLodRenderer = class {
+  constructor(config) {
+    this.blockTree = new BlockTree();
+    /** Number of GS selected in the last update (for UI display). */
+    this.lastSelectedCount = 0;
+    /**
+     * Per-frame update. Call BEFORE SplattingPlugin.updateEffect().
+     * Uses the global SplattingPlugin reference if plugin not specified.
+     *
+     * @param camera  PerspectiveCamera for position, forward direction, and FOV.
+     * @param splattingPlugin  Optional explicit plugin reference.
+     * @param maxSplats  Global GS budget for this frame. Default 500000.
+     * @param lodScale  LOD scale factor. Default 1.0.
+     * @param pixelScaleLimit  Minimum pixel scale threshold. Default 0.001.
+     * @param foveated  Optional foveated rendering config.
+     * @param dynamicMode  Enable dynamic budget mode. Default true.
+     */
+    this._logThrottle = 0;
+    this.blockManager = new BlockManager(config);
+    this.texturePool = new SharedTexturePool(config?.maxPoolPages ?? 64);
+  }
+  /** Whether this renderer has active blocks. */
+  get hasActiveBlocks() {
+    return this.blockManager.blocks.length > 0;
+  }
+  update(camera, splattingPlugin, maxSplats = 5e5, lodScale = 1, pixelScaleLimit = 1e-3, foveated, dynamicMode = true) {
+    const plugin = splattingPlugin ?? Internal_exports.getSplattingPlugin();
+    if (!plugin) {
+      if (this._logThrottle++ % 30 === 0) console.warn("[LOD] plugin undefined");
+      return;
+    }
+    this.texturePool.newFrame();
+    const cameraPos2 = camera.position;
+    const activeBlockIds = this.blockManager.update(cameraPos2);
+    if (activeBlockIds.length === 0) {
+      if (this._logThrottle++ % 30 === 0) console.warn("[LOD] no active blocks");
+      plugin.setExternalOrder(new Uint32Array(0), 0);
+      return;
+    }
+    const forward = new Vector3();
+    camera.getWorldDirection(forward);
+    const camPos = [cameraPos2.x, cameraPos2.y, cameraPos2.z];
+    const camFwd = [forward.x, forward.y, forward.z];
+    const config = {
+      cameraPos: camPos,
+      cameraForward: camFwd,
+      lodScale,
+      pixelScaleLimit,
+      maxSplats,
+      foveated,
+      dynamicMode
+    };
+    const { order, count } = this.blockTree.traverse(activeBlockIds, config);
+    this.lastSelectedCount = count;
+    if (count > 0) {
+      plugin.setExternalOrder(order, count);
+    } else if (this._logThrottle++ % 30 === 0) {
+      console.warn("[LOD] traverse 0 for", activeBlockIds.length, "blocks");
+    }
+  }
+};
 
 // src/rad-decoder-browser.ts
 function readU32LE(data, off) {
@@ -66977,7 +67296,7 @@ function readU64LE(data, off) {
   const hi = readU32LE(data, off + 4);
   return lo + hi * 4294967296;
 }
-function f16ToF32(h) {
+function f16ToF322(h) {
   const sign = (h & 32768) << 16;
   let exp = h >> 10 & 31;
   let mant = h & 1023;
@@ -67202,9 +67521,9 @@ function decodedBlockToSplatData(decoded) {
   const table = new Array(cols);
   for (let i2 = 0; i2 < cols; i2++) table[i2] = new Float32Array(n);
   for (let i2 = 0; i2 < n; i2++) {
-    table[0][i2] = f16ToF32(decoded.center[i2 * 3]);
-    table[1][i2] = f16ToF32(decoded.center[i2 * 3 + 1]);
-    table[2][i2] = f16ToF32(decoded.center[i2 * 3 + 2]);
+    table[0][i2] = f16ToF322(decoded.center[i2 * 3]);
+    table[1][i2] = f16ToF322(decoded.center[i2 * 3 + 1]);
+    table[2][i2] = f16ToF322(decoded.center[i2 * 3 + 2]);
     table[3][i2] = ln0r8ToF322(decoded.scale[i2 * 3]);
     table[4][i2] = ln0r8ToF322(decoded.scale[i2 * 3 + 1]);
     table[5][i2] = ln0r8ToF322(decoded.scale[i2 * 3 + 2]);
@@ -67225,95 +67544,6 @@ function decodedBlockToSplatData(decoded) {
   }
   return { table, counts: n, shDegree };
 }
-
-// src/block-tree.ts
-var BlockTree = class {
-  constructor() {
-    this.blocks = [];
-    this.treeDataCache = [];
-  }
-  addBlock(data) {
-    this.blocks.push(data);
-    const totalNodes = data.totalNodes;
-    const centers = new Float32Array(totalNodes * 3);
-    for (let i2 = 0; i2 < totalNodes; i2++) {
-      centers[i2 * 3] = f16ToF32(data.center[i2 * 3]);
-      centers[i2 * 3 + 1] = f16ToF32(data.center[i2 * 3 + 1]);
-      centers[i2 * 3 + 2] = f16ToF32(data.center[i2 * 3 + 2]);
-    }
-    const featureSizes = computeFeatureSizes(data.scale, totalNodes);
-    this.treeDataCache.push({
-      totalNodes,
-      childStart: data.childStart,
-      childCount: data.childCount,
-      centers,
-      featureSizes
-    });
-  }
-  clear() {
-    this.blocks.length = 0;
-    this.treeDataCache.length = 0;
-  }
-  /**
-   * Traverse active blocks and produce a merged ordering array.
-   */
-  traverse(activeBlockIds, cameraPos2, lodScale, pixelScaleLimit, maxSplats) {
-    const allIndices = [];
-    let total = 0;
-    for (const blockId of activeBlockIds) {
-      const td2 = this.treeDataCache[blockId];
-      if (!td2) continue;
-      const result = traverseBlock(td2, cameraPos2, [0, 0, 0], lodScale, pixelScaleLimit, maxSplats);
-      if (result.count > 0) {
-        allIndices.push(result.indices.subarray(0, result.count));
-        total += result.count;
-      }
-    }
-    const order = new Uint32Array(total);
-    let offset = 0;
-    for (const indices of allIndices) {
-      order.set(indices, offset);
-      offset += indices.length;
-    }
-    return { order, totalSplats: total };
-  }
-};
-
-// src/block-renderer.ts
-var BlockLodRenderer = class {
-  constructor(config) {
-    this.blockTree = new BlockTree();
-    this.blockManager = new BlockManager(config);
-    this.texturePool = new SharedTexturePool(config?.maxPoolPages ?? 64);
-  }
-  /** Whether this renderer has active blocks. */
-  get hasActiveBlocks() {
-    return this.blockManager.blocks.length > 0;
-  }
-  /**
-   * Per-frame update. Call BEFORE SplattingPlugin.updateEffect().
-   * Uses the global SplattingPlugin reference if plugin not specified.
-   */
-  update(cameraPos2, splattingPlugin, lodScale = 1, pixelScaleLimit = 1e-3, maxSplatsPerBlock = 5e5) {
-    const plugin = splattingPlugin ?? Internal_exports.getSplattingPlugin();
-    if (!plugin) return;
-    this.texturePool.newFrame();
-    const activeBlockIds = this.blockManager.update(cameraPos2);
-    if (activeBlockIds.length === 0) {
-      plugin.setExternalOrder(new Uint32Array(0), 0);
-      return;
-    }
-    const camPos = [cameraPos2.x, cameraPos2.y, cameraPos2.z];
-    const { order, totalSplats } = this.blockTree.traverse(
-      activeBlockIds,
-      camPos,
-      lodScale,
-      pixelScaleLimit,
-      maxSplatsPerBlock
-    );
-    plugin.setExternalOrder(order, totalSplats);
-  }
-};
 
 // src/index.ts
 var InstancedBufferGeometry2 = Internal_exports.InstancedBufferGeometry;
@@ -67421,12 +67651,15 @@ export {
   Vector3,
   Vector4,
   computeFeatureSizes,
+  computePixelScale,
   createViewer,
   createViewerContext,
   decodeRad,
   decodedBlockToSplatData,
+  depthSort,
   downloadTexture,
-  f16ToF32,
+  f16ToF322 as f16ToF32,
+  prepareTreeData,
   setViewerConfig2 as setViewerConfig,
   traverseBlock
 };
